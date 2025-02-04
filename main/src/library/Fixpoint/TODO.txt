@@ -1,0 +1,10 @@
+Ram_new.flix:
+    Add 'exit' at some point, when stuff starts to work.
+    Possibly add support for more searches.
+    Maybe add not equal? Could allow more optimal searching of structures
+    Implement equality for PredSym using only int id
+    Implement order for PredSym using only int id
+
+Stratifier.flix:
+    Rewrite using Tarjan's SCC algorithm and check if a StrongEdge appears in SCC
+
