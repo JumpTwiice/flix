@@ -62,6 +62,7 @@ mod Fixpoint.Ast.Ram {
     @Internal
     pub enum RelOp[v] {
         case Search(TupleVar, RamSym[v], RelOp[v])
+        // TODO: Add extra field describing which index to use. Could use a simple int32.
         case SearchWithIndex(TupleVar, RamSym[v], Vector[QueryExp], RelOp[v])
         case Functional(TupleVar, Vector[v] -> Vector[Vector[v]], Vector[RamTerm[v]], RelOp[v])
         case Project(Vector[RamTerm[v]], RamSym[v])

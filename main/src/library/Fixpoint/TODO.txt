@@ -4,7 +4,10 @@ Ram_new.flix:
     Maybe add not equal? Could allow more optimal searching of structures
     Implement equality for PredSym using only int id
     Implement order for PredSym using only int id
+    For SearchWithIndex: Add extra field describing which index to use. Could use a simple int32.
 
 Stratifier.flix:
     Rewrite using Tarjan's SCC algorithm and check if a StrongEdge appears in SCC
 
+General note:
+    The interpreter should receive some meta-data about which indexes should be created for the different relations
