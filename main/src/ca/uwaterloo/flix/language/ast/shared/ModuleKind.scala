@@ -1,5 +1,4 @@
 /*
- * Copyright 2023 Magnus Madsen
  * Copyright 2025 Chenhao Gao
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,18 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package ca.uwaterloo.flix.api.lsp.provider.completion
+package ca.uwaterloo.flix.language.ast.shared
 
-import ca.uwaterloo.flix.api.Flix
-import ca.uwaterloo.flix.api.lsp.provider.completion.syntactic.{KeywordCompleter, ExprSnippetCompleter}
-import ca.uwaterloo.flix.language.ast.TypedAst
+/**
+  * Represents the kind of a module.
+  */
+sealed trait ModuleKind
 
-object ExprCompleter {
+object ModuleKind {
+  /**
+    * A module associated with an effect, enum, struct, or trait.
+    */
+  case object Companion extends ModuleKind
 
-  def getCompletions(context: CompletionContext)(implicit flix: Flix, root: TypedAst.Root): Iterable[Completion] = {
-      KeywordCompleter.getExprKeywords ++
-      ExprSnippetCompleter.getCompletions() ++
-      HoleCompletion.getHoleCompletion(context, root)
-  }
-
+  /**
+    * A standalone module.
+    */
+  case object Standalone extends ModuleKind
 }
