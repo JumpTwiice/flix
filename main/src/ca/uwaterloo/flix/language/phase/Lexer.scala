@@ -307,9 +307,7 @@ object Lexer {
       case '\\' => TokenKind.Backslash
       case _ if isMatchPrev(".{") => TokenKind.DotCurlyL
       case '.' =>
-        if (peek() == '.' && peekPeek().contains('.')) {
-          advance()
-          advance()
+        if (s.sc.advanceIfMatch("..")) {
           TokenKind.DotDotDot
         } else if (previousPrevious().exists(_.isWhitespace)) {
           // If the dot is prefixed with whitespace we treat that as an error.
@@ -491,31 +489,24 @@ object Lexer {
   }
 
   /**
-    * Check that the potential keyword is sufficiently separated, taking care not to go out-of-bounds.
+    * Check that the potential keyword is sufficiently separated.
     * A keyword is separated if it is surrounded by anything __but__ a character, digit a dot or underscore.
     * Note that __comparison includes current__.
     */
   private def isSeparated(keyword: String, allowDot: Boolean = false)(implicit s: State): Boolean = {
     def isSep(c: Char) = !(c.isLetter || c.isDigit || c == '_' || !allowDot && c == '.')
-
-    val leftIndex = s.sc.getOffset - 2
-    val rightIndex = s.sc.getOffset + keyword.length - 1
-    val isSeperatedLeft = leftIndex < 0 || isSep(s.src.data(leftIndex))
-    val isSeperatedRight = rightIndex > s.src.data.length - 1 || isSep(s.src.data(rightIndex))
-    isSeperatedLeft && isSeperatedRight
+    s.sc.nthIsPOrOutOfBounds(-2, isSep) && s.sc.nthIsPOrOutOfBounds(keyword.length - 1, isSep)
   }
 
   /**
-    * Check that the potential operator is sufficiently separated, taking care not to go out-of-bounds.
+    * Check that the potential operator is sufficiently separated.
     * An operator is separated if it is surrounded by anything __but__ another valid user operator character.
     * Note that __comparison includes current__.
     */
   private def isSeparatedOperator(keyword: String)(implicit s: State): Boolean = {
-    val leftIndex = s.sc.getOffset - 2
-    val rightIndex = s.sc.getOffset + keyword.length - 1
-    val isSeperatedLeft = leftIndex < 0 || isUserOp(s.src.data(leftIndex)).isEmpty
-    val isSeperatedRight = rightIndex > s.src.data.length - 1 || isUserOp(s.src.data(rightIndex)).isEmpty
-    isSeperatedLeft && isSeperatedRight
+    /** Returns true if the n offset character is a separator or if n is out of bounds. */
+    def isSep(c: Char) = isUserOp(c).isEmpty
+    s.sc.nthIsPOrOutOfBounds(-2, isSep) && s.sc.nthIsPOrOutOfBounds(keyword.length - 1, isSep)
   }
 
   /**
@@ -697,26 +688,14 @@ object Lexer {
   }
 
 
-  /**
-    * Moves current position past an infix function.
-    */
+  /** Moves current position past an infix function. */
   private def acceptInfixFunction()(implicit s: State): TokenKind = {
-    while (!eof()) {
-      val p = peek()
-      if (p == '`') {
-        advance()
-        return TokenKind.InfixFunction
-      }
-
-      if (p != '.' && p != '!' && !p.isLetter && !p.isDigit && !isMathNameChar(p) && !isGreekNameChar(p)) {
-        // check for chars that are not allowed in function names,
-        // to handle cases like '`my function` or `my/**/function`'
-        return TokenKind.Err(LexerError.UnterminatedInfixFunction(sourceLocationAtStart()))
-      }
-
-      advance()
+    s.sc.advanceWhile(c => c == '.' || c == '!' || c.isLetter || c.isDigit || isMathNameChar(c) || isGreekNameChar(c))
+    if (s.sc.advanceIfMatch('`')) {
+      TokenKind.InfixFunction
+    } else {
+      TokenKind.Err(LexerError.UnterminatedInfixFunction(sourceLocationAtStart()))
     }
-    TokenKind.Err(LexerError.UnterminatedInfixFunction(sourceLocationAtStart()))
   }
 
   /**
@@ -987,67 +966,45 @@ object Lexer {
     error.getOrElse(TokenKind.LiteralInt32)
   }
 
-  /**
-    * Moves current position past an annotation. IE. "@Test".
-    */
+  /** Moves current position past an annotation. IE. "@Test". */
   private def acceptAnnotation()(implicit s: State): TokenKind = {
-    while (!eof()) {
-      if (!peek().isLetter) {
-        return TokenKind.Annotation
-      } else {
-        advance()
-      }
-    }
+    s.sc.advanceWhile(_.isLetter)
     TokenKind.Annotation
   }
 
   /**
-    * Moves current position past a line- or doc-comment
+    * Moves current position past a line-comment or a line of a doc-comment.
+    *
+    * N.B.: The content just before the current position is assumed to be "X//"
+    * where `X != '/'` if it exists.
     */
   private def acceptLineOrDocComment()(implicit s: State): TokenKind = {
-    // Check for doc-comment. A doc-comments leads with exactly 3 slashes.
-    // For instance '//// this is not a doc-comment'.
-    val kind = (peek(), peekPeek()) match {
-      case ('/', Some(c)) if c != '/' => TokenKind.CommentDoc
-      case _ => TokenKind.CommentLine
-    }
-    // Advance until a newline is found.
-    while (!eof()) {
-      if (peek() == '\n') {
-        return kind
-      } else {
-        advance()
-      }
-    }
-    kind
+    // A doc comment leads with exactly 3 slashes, for example `//// example` is NOT a doc comment.
+    val slashCount = s.sc.advanceWhileWithCount(_ == '/')
+    s.sc.advanceWhile(c => c != '\n')
+    if (slashCount == 1) TokenKind.CommentDoc else TokenKind.CommentLine
   }
 
   /**
-    * Moves current position past a block-comment.
-    * Note that block-comments can be nested, in which case we need to handle multiple terminating "* /".
-    * This is done be counting the nesting level and enforcing a max nesting level.
-    * If this level is reached a `TokenKind.Err` is returned.
-    * A block-comment might also be unterminated if there is less terminations than levels of nesting.
-    * In this case a `TokenKind.Err` is returned as well.
+    * Moves current position past a block-comment. Note that block-comments can be nested.
+    * If the max nesting level is reached a `TokenKind.Err` is immediately returned.
+    * A block-comment is unterminated if there are less terminations than levels of nesting.
     */
   private def acceptBlockComment()(implicit s: State): TokenKind = {
     var level = 1
-    while (!eof()) {
-      (peek(), peekPeek()) match {
-        case ('/', Some('*')) =>
-          level += 1
-          if (level >= BlockCommentMaxNestingLevel) {
-            return TokenKind.Err(LexerError.BlockCommentTooDeep(sourceLocationAtCurrent()))
-          }
-          advance()
-        case ('*', Some('/')) =>
-          level -= 1
-          advance()
-          advance()
-          if (level == 0) {
-            return TokenKind.CommentBlock
-          }
-        case _ => advance()
+    while (s.sc.inBounds) {
+      if (s.sc.advanceIfMatch("/*")) {
+        level += 1
+        if (level >= BlockCommentMaxNestingLevel) {
+          return TokenKind.Err(LexerError.BlockCommentTooDeep(sourceLocationAtCurrent()))
+        }
+      } else if (s.sc.advanceIfMatch("*/")) {
+        level -= 1
+        if (level == 0) {
+          return TokenKind.CommentBlock
+        }
+      } else {
+        s.sc.advance()
       }
     }
     TokenKind.Err(LexerError.UnterminatedBlockComment(sourceLocationAtStart()))
@@ -1089,7 +1046,7 @@ object Lexer {
     * A class to iterate through an array of characters while maintaining the line and column index
     * of the cursor.
     */
-  private class StringCursor(val data: Array[Char]) {
+  private final class StringCursor(val data: Array[Char]) {
 
     /** The cursor pointing into `data`. */
     private var offset: Int = 0
@@ -1233,6 +1190,25 @@ object Lexer {
     def advanceWhile(p: Char => Boolean): Unit = {
       while (this.inBounds && p(data(offset))) {
         advance()
+      }
+    }
+
+    /** Continuously advance the cursor while `p` returns true. Returns the number of advances. */
+    def advanceWhileWithCount(p: Char => Boolean): Int = {
+      val startingOffset = offset
+      while (this.inBounds && p(data(offset))) {
+        advance()
+      }
+      offset - startingOffset
+    }
+
+    /** Faster equivalent of `nth(n).map(p).getOrElse(true)`. */
+    def nthIsPOrOutOfBounds(n: Int, p: Char => Boolean): Boolean = {
+      val index = offset + n
+      if (0 <= index && index < data.length) {
+        p(data(index))
+      } else {
+        true
       }
     }
 
