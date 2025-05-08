@@ -249,6 +249,7 @@ class Flix {
     "Fixpoint/Phase/Hoisting.flix" -> LocalResource.get("/src/library/Fixpoint/Phase/Hoisting.flix"),
     "Fixpoint/Phase/Lowering.flix" -> LocalResource.get("/src/library/Fixpoint/Phase/Lowering.flix"),
     "Fixpoint/Phase/FixPredSyms.flix" -> LocalResource.get("/src/library/Fixpoint/Phase/FixPredSyms.flix"),
+    "Fixpoint/Phase/JoinOptimizer.flix" -> LocalResource.get("/src/library/Fixpoint/Phase/JoinOptimizer.flix"),
 
     "Fixpoint/Counter.flix" -> LocalResource.get("/src/library/Fixpoint/Counter.flix"),
     "Fixpoint/Helpers.flix" -> LocalResource.get("/src/library/Fixpoint/Helpers.flix"),
@@ -265,6 +266,9 @@ class Flix {
     "Fixpoint/Solver.flix" -> LocalResource.get("/src/library/Fixpoint/Solver.flix"),
     "Fixpoint/SubstitutePredSym.flix" -> LocalResource.get("/src/library/Fixpoint/SubstitutePredSym.flix"),
     "Fixpoint/PrecedenceGraph.flix" -> LocalResource.get("/src/library/Fixpoint/PrecedenceGraph.flix"),
+
+
+    "Fixpoint/JoinProfiler.flix" -> LocalResource.get("/src/library/Fixpoint/JoinProfiler.flix"),
 
     "Fixpoint/Ast/Datalog.flix" -> LocalResource.get("/src/library/Fixpoint/Ast/Datalog.flix"),
     "Fixpoint/Ast/Shared.flix" -> LocalResource.get("/src/library/Fixpoint/Ast/Shared.flix"),
