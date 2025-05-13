@@ -161,6 +161,7 @@ class Flix {
     "BigDecimal.flix" -> LocalResource.get("/src/library/BigDecimal.flix"),
     "BigInt.flix" -> LocalResource.get("/src/library/BigInt.flix"),
     "Box.flix" -> LocalResource.get("/src/library/Box.flix"),
+    "BPlusTree.flix" -> LocalResource.get("/src/library/BPlusTree.flix"),
     "Chain.flix" -> LocalResource.get("/src/library/Chain.flix"),
     "Char.flix" -> LocalResource.get("/src/library/Char.flix"),
     "CodePoint.flix" -> LocalResource.get("/src/library/CodePoint.flix"),
@@ -266,6 +267,7 @@ class Flix {
     "Fixpoint/Toggle.flix" -> LocalResource.get("/src/library/Fixpoint/Toggle.flix"),
     "Fixpoint/SolverApi.flix" -> LocalResource.get("/src/library/Fixpoint/SolverApi.flix"),
     "Fixpoint3/Solver.flix" -> LocalResource.get("/src/library/Fixpoint3/Solver.flix"),
+    "Fixpoint3/Ram.flix" -> LocalResource.get("/src/library/Fixpoint3/Ram.flix"),
 
 
     "Abort.flix" -> LocalResource.get("/src/library/Abort.flix"),
