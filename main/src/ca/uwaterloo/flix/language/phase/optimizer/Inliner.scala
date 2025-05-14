@@ -331,6 +331,14 @@ object Inliner {
       val rs = rules.map(visitMatchRule(_, ctx0))
       Expr.Match(e, rs, tpe, eff, loc)
 
+    case Expr.ExtensibleMatch(label, exp1, sym2, exp2, sym3, exp3, tpe, eff, loc) =>
+      val freshVarSym2 = Symbol.freshVarSym(sym2)
+      val freshVarSym3 = Symbol.freshVarSym(sym3)
+      val e1 = visitExp(exp1, ctx0)
+      val e2 = visitExp(exp2, ctx0.addVarSubst(sym2, freshVarSym2).addInScopeVar(freshVarSym2, BoundKind.ParameterOrPattern))
+      val e3 = visitExp(exp3, ctx0.addVarSubst(sym3, freshVarSym3).addInScopeVar(freshVarSym3, BoundKind.ParameterOrPattern))
+      Expr.ExtensibleMatch(label, e1, freshVarSym2, e2, freshVarSym3, e3, tpe, eff, loc)
+
     case Expr.VectorLit(exps, tpe, eff, loc) =>
       val es = exps.map(visitExp(_, ctx0))
       Expr.VectorLit(es, tpe, eff, loc)
@@ -490,10 +498,28 @@ object Inliner {
     * @param exps the arguments to the function.
     * @param ctx0 the local context.
     */
-  private def shouldInlineDef(defn: MonoAst.Def, exps: List[Expr], ctx0: LocalContext)(implicit sctx: SharedContext): Boolean = {
-    !sctx.delta.contains(defn.sym) &&
-      !ctx0.currentlyInlining &&
-      !defn.spec.defContext.isSelfRef &&
+  private def shouldInlineDef(defn: MonoAst.Def, exps: List[Expr], ctx0: LocalContext)(implicit sym0: Symbol.DefnSym, sctx: SharedContext): Boolean = {
+    if (ctx0.currentlyInlining) {
+      return false
+    }
+
+    if (defn.spec.ann.isDontInline) {
+      return false
+    }
+
+    if (sctx.delta.contains(defn.sym)) {
+      return false
+    }
+
+    if (defn.spec.ann.isInline) {
+      if (defn.sym == sym0) {
+        return false
+      }
+
+      return true
+    }
+
+    !defn.spec.defContext.isSelfRef &&
       (isSingleAction(defn.exp) || isSimple(defn.exp) || hasKnownLambda(exps))
   }
 
@@ -706,12 +732,14 @@ object Inliner {
   }
 
   private object SharedContext {
+
     /**
       * Returns a fresh [[SharedContext]].
       *
       * The delta set does not change during the lifetime of the shared context.
       */
     def mk(delta: Set[Symbol.DefnSym]): SharedContext = new SharedContext(delta, new ConcurrentHashMap(), new ConcurrentHashMap())
+
   }
 
   /**
