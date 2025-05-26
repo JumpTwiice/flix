@@ -140,7 +140,8 @@ object GenFunAndClosureClasses {
     val closureArgTypes = defn.cparams.map(_.tpe)
     for ((argType, index) <- closureArgTypes.zipWithIndex) {
       val erasedArgType = JvmOps.getErasedJvmType(argType)
-      AsmOps.compileField(visitor, s"clo$index", erasedArgType, isStatic = false, isPrivate = false, isVolatile = false)
+      val field = visitor.visitField(ACC_PUBLIC, s"clo$index", erasedArgType.toDescriptor, null, null)
+      field.visitEnd()
     }
     for ((x, i) <- defn.lparams.zipWithIndex) {
       visitor.visitField(ACC_PUBLIC, s"l$i", JvmOps.getErasedJvmType(x.tpe).toDescriptor, null, null)
@@ -235,8 +236,8 @@ object GenFunAndClosureClasses {
     val setPc = {
       import BytecodeInstructions.*
       SWAP() ~ DUP_X1() ~ SWAP() ~ // clo, pc ---> clo, clo, pc
-      BytecodeInstructions.cheat(_.visitFieldInsn(Opcodes.PUTFIELD, classType.name.toInternalName, "pc", BackendType.Int32.toDescriptor)) ~
-        lparams.foldLeft(nop()){case (acc, (name, index, isWild, tpe)) =>
+        BytecodeInstructions.cheat(_.visitFieldInsn(Opcodes.PUTFIELD, classType.name.toInternalName, "pc", BackendType.Int32.toDescriptor)) ~
+        lparams.foldLeft(nop()) { case (acc, (name, index, isWild, tpe)) =>
           val erasedTpe = BackendType.toErasedBackendType(tpe)
           if (isWild) acc else acc ~ DUP() ~ xLoad(erasedTpe, index) ~ cheat(_.visitFieldInsn(Opcodes.PUTFIELD, classType.name.toInternalName, name, erasedTpe.toDescriptor))
         } ~
@@ -349,10 +350,10 @@ object GenFunAndClosureClasses {
     BytecodeInstructions.xToString(BackendType.Int32)(mf)
     m.visitInsn(AASTORE)
 
-    params.zipWithIndex.foreach{
+    params.zipWithIndex.foreach {
       case ((fieldName, fieldType), i) =>
         m.visitInsn(DUP)
-        compileInt(i+2)(m)
+        compileInt(i + 2)(m)
         m.visitLdcInsn(fieldName)
         m.visitLdcInsn(" = ")
         m.visitMethodInsn(INVOKEVIRTUAL, BackendObjType.String.jvmName.toInternalName, "concat", MethodDescriptor.mkDescriptor(BackendObjType.String.toTpe)(BackendObjType.String.toTpe).toDescriptor, false)
