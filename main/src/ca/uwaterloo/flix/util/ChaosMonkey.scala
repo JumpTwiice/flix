@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Magnus Madsen, Lukas Rønn
+ * Copyright 2025 Cade Lueker
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package ca.uwaterloo.flix.api.lsp.provider.completion
+package ca.uwaterloo.flix.util
 
-import ca.uwaterloo.flix.api.lsp.Range
+import ca.uwaterloo.flix.api.Flix
+
+import scala.util.Random
 
 /**
-  * Represents a completion context.
-  *
-  * @param range        Start and end position of the word underneath (or alongside) the cursor
+  * Class for introducing randomness into Lists.
   */
-case class CompletionContext(range: Range)
+object ChaosMonkey {
+  /*
+   * Static method for shuffling items in a container type.
+   */
+  def chaos[A](l: List[A])(implicit flix: Flix): List[A] = {
+    // reorder the list when the Chaos Monkey is enabled.
+    if (flix.options.xchaosMonkey)
+      Random.shuffle(l)
+    else
+      l
+  }
+}

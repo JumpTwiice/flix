@@ -50,7 +50,7 @@ object SimplifiedAstPrinter {
     case Var(sym, _, _) => printVarSym(sym)
     case Lambda(fparams, exp, _, _) => DocAst.Expr.Lambda(fparams.map(printFormalParam), print(exp))
     case LambdaClosure(cparams, fparams, _, exp, _, _) => DocAst.Expr.Lambda((cparams ++ fparams).map(printFormalParam), print(exp))
-    case ApplyAtomic(op, exps, tpe, _, _) => OpPrinter.print(op, exps.map(print), MonoTypePrinter.print(tpe))
+    case ApplyAtomic(op, exps, tpe, purity, _) => OpPrinter.print(op, exps.map(print), MonoTypePrinter.print(tpe), PurityPrinter.print(purity))
     case ApplyClo(exp1, exp2, _, _, _) => DocAst.Expr.ApplyClo(print(exp1), List(print(exp2)))
     case ApplyDef(sym, exps, _, _, _) => DocAst.Expr.ApplyDef(sym, exps.map(print))
     case ApplyLocalDef(sym, exps, _, _, _) => DocAst.Expr.ApplyClo(printVarSym(sym), exps.map(print))
@@ -62,12 +62,12 @@ object SimplifiedAstPrinter {
     case LocalDef(sym, fparams, exp1, exp2, tpe, eff, _) => DocAst.Expr.LocalDef(printVarSym(sym), fparams.map(printFormalParam), Some(MonoTypePrinter.print(tpe)), Some(PurityPrinter.print(eff)), print(exp1), print(exp2))
     case Scope(sym, exp, _, _, _) => DocAst.Expr.Scope(printVarSym(sym), print(exp))
     case TryCatch(exp, rules, _, _, _) => DocAst.Expr.TryCatch(print(exp), rules.map {
-      case SimplifiedAst.CatchRule(sym, clazz, exp) =>
-        (sym, clazz, print(exp))
+      case SimplifiedAst.CatchRule(sym, clazz, body) =>
+        (sym, clazz, print(body))
     })
     case RunWith(exp, effUse, rules, _, _, _) => DocAst.Expr.RunWithHandler(print(exp), effUse.sym, rules.map {
-      case SimplifiedAst.HandlerRule(op, fparams, exp) =>
-        (op.sym, fparams.map(printFormalParam), print(exp))
+      case SimplifiedAst.HandlerRule(op, fparams, body) =>
+        (op.sym, fparams.map(printFormalParam), print(body))
     })
     case Do(op, exps, _, _, _) => DocAst.Expr.Do(op.sym, exps.map(print))
     case NewObject(name, clazz, tpe, _, methods, _) => DocAst.Expr.NewObject(name, clazz, MonoTypePrinter.print(tpe), methods.map {

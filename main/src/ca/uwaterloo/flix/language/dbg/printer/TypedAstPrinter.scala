@@ -50,8 +50,10 @@ object TypedAstPrinter {
     case Expr.Match(exp, rules, _, _, _) => DocAst.Expr.Match(print(exp), rules.map(printMatchRule))
     case Expr.TypeMatch(_, _, _, _, _) => DocAst.Expr.Unknown
     case Expr.RestrictableChoose(_, _, _, _, _, _) => DocAst.Expr.Unknown
+    case Expr.ExtensibleMatch(_, _, _, _, _, _, _, _, _) => DocAst.Expr.Unknown // TODO: Ext-Variants
     case Expr.Tag(sym, exps, _, _, _) => DocAst.Expr.Tag(sym.sym, exps.map(print))
     case Expr.RestrictableTag(_, _, _, _, _) => DocAst.Expr.Unknown
+    case Expr.ExtensibleTag(_, _, _, _, _) => DocAst.Expr.Unknown // TODO: Ext-Variants
     case Expr.Tuple(elms, _, _, _) => DocAst.Expr.Tuple(elms.map(print))
     case Expr.RecordSelect(exp, label, _, _, _) => DocAst.Expr.RecordSelect(label, print(exp))
     case Expr.RecordExtend(label, exp1, exp2, _, _, _) => DocAst.Expr.RecordExtend(label, print(exp1), print(exp2))
@@ -116,21 +118,21 @@ object TypedAstPrinter {
     * Returns the [[DocAst]] representation of `rule`.
     */
   private def printHandlerRule(rule: TypedAst.HandlerRule): (Symbol.OpSym, List[DocAst.Expr.AscriptionTpe], DocAst.Expr) = rule match {
-    case TypedAst.HandlerRule(op, fparams, exp, loc) => (op.sym, fparams.map(printFormalParam), print(exp))
+    case TypedAst.HandlerRule(op, fparams, exp, _) => (op.sym, fparams.map(printFormalParam), print(exp))
   }
 
   /**
     * Returns the [[DocAst]] representation of `rule`.
     */
   private def printCatchRule(rule: TypedAst.CatchRule): (Symbol.VarSym, Class[?], DocAst.Expr) = rule match {
-    case TypedAst.CatchRule(bnd, clazz, exp, loc) => (bnd.sym, clazz, print(exp))
+    case TypedAst.CatchRule(bnd, clazz, exp, _) => (bnd.sym, clazz, print(exp))
   }
 
   /**
     * Returns the [[DocAst]] representation of `rule`.
     */
   private def printMatchRule(rule: TypedAst.MatchRule): (DocAst.Expr, Option[DocAst.Expr], DocAst.Expr) = rule match {
-    case TypedAst.MatchRule(pat, guard, exp, loc) => (printPattern(pat), guard.map(print), print(exp))
+    case TypedAst.MatchRule(pat, guard, exp, _) => (printPattern(pat), guard.map(print), print(exp))
   }
 
   /**
@@ -151,8 +153,8 @@ object TypedAstPrinter {
     */
   private def printRecordPattern(pats: List[Record.RecordLabelPattern], pat: Pattern): DocAst.Expr = {
     pats.foldRight(printPattern(pat)) {
-      case (TypedAst.Pattern.Record.RecordLabelPattern(label, pat, _, _), acc) =>
-        DocAst.Expr.RecordExtend(label, printPattern(pat), acc)
+      case (TypedAst.Pattern.Record.RecordLabelPattern(label, rest, _, _), acc) =>
+        DocAst.Expr.RecordExtend(label, printPattern(rest), acc)
     }
   }
 

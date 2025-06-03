@@ -556,6 +556,9 @@ object Redundancy {
 
       usedMatch ++ usedRules.reduceLeft(_ ++ _)
 
+    case Expr.ExtensibleMatch(_, exp1, bnd1, exp2, bnd2, exp3, _, _, _) =>
+      // TODO: Ext-Variants
+      visitExp(exp1, env0, rc) ++ visitExp(exp2, env0 + bnd1.sym, rc) ++ visitExp(exp3, env0 + bnd2.sym, rc)
 
     case Expr.Tag(CaseSymUse(sym, _), exps, _, _, _) =>
       val us = visitExps(exps, env0, rc)
@@ -564,6 +567,9 @@ object Redundancy {
       us
 
     case Expr.RestrictableTag(_, exps, _, _, _) =>
+      visitExps(exps, env0, rc)
+
+    case Expr.ExtensibleTag(_, exps, _, _, _) =>
       visitExps(exps, env0, rc)
 
     case Expr.Tuple(elms, _, _, _) =>
@@ -691,10 +697,18 @@ object Redundancy {
       sctx.effSyms.put(sym.sym, ())
       rules.foldLeft(Used.empty) {
         case (acc, HandlerRule(_, fparams, body, _)) =>
-          val usedBody = visitExp(body, env0, rc)
           val syms = fparams.map(_.bnd.sym)
-          val dead = syms.filter(deadVarSym(_, usedBody))
-          acc ++ usedBody ++ dead.map(UnusedVarSym.apply)
+          val shadowedFparamVars = syms.map(s => shadowing(s.text, s.loc, env0))
+          val env1 = env0 ++ syms
+          val usedBody = visitExp(body, env1, rc)
+          syms.zip(shadowedFparamVars).foldLeft(acc ++ usedBody) {
+            case (acc, (s, shadow)) =>
+              if (deadVarSym(s, usedBody)) {
+                acc ++ shadow + UnusedVarSym(s)
+              } else {
+                acc ++ shadow
+              }
+          }
       }
 
     case Expr.RunWith(exp1, exp2, _, _, _) =>

@@ -182,6 +182,7 @@ class VSCodeLspServer(port: Int, o: Options) extends WebSocketServer(new InetSoc
       case JString("lsp/workspaceSymbols") => Request.parseWorkspaceSymbols(json)
       case JString("lsp/uses") => Request.parseUses(json)
       case JString("lsp/semanticTokens") => Request.parseSemanticTokens(json)
+      case JString("lsp/signature") => Request.parseSignature(json)
       case JString("lsp/inlayHints") => Request.parseInlayHint(json)
       case JString("lsp/showAst") => Request.parseShowAst(json)
       case JString("lsp/codeAction") => Request.parseCodeAction(json)
@@ -268,7 +269,11 @@ class VSCodeLspServer(port: Int, o: Options) extends WebSocketServer(new InetSoc
 
     case Request.Complete(id, uri, pos) =>
       // Find the source of the given URI (which should always exist).
-      ("id" -> id) ~ ("status" -> ResponseStatus.Success) ~ ("result" -> CompletionProvider.autoComplete(uri, pos, currentErrors)(root, flix).toJSON)
+      val completions = CompletionProvider
+        .getCompletions(uri, pos, currentErrors)(root, flix)
+        .map(_.toCompletionItem(flix))
+      val completionList = CompletionList(isIncomplete = true, completions)
+      ("id" -> id) ~ ("status" -> ResponseStatus.Success) ~ ("result" -> completionList.toJSON)
 
     case Request.Highlight(id, uri, pos) =>
       val highlights = HighlightProvider.processHighlight(uri, pos)(root)
@@ -309,6 +314,12 @@ class VSCodeLspServer(port: Int, o: Options) extends WebSocketServer(new InetSoc
 
     case Request.SemanticTokens(id, uri) =>
       ("id" -> id) ~ ("status" -> ResponseStatus.Success) ~ ("result" -> ("data" -> SemanticTokensProvider.provideSemanticTokens(uri)(root)))
+
+    case Request.Signature(id, uri, pos) =>
+      SignatureHelpProvider.provideSignatureHelp(uri, pos)(root, flix) match {
+        case Some(signature) => ("id" -> id) ~ ("status" -> ResponseStatus.Success) ~ ("result" -> signature.toJSON)
+        case None => ("id" -> id) ~ ("status" -> ResponseStatus.InvalidRequest) ~ ("result" -> "Nothing found for this signature.")
+      }
 
     case Request.InlayHint(id, uri, range) =>
       ("id" -> id) ~ ("status" -> ResponseStatus.Success) ~ ("result" -> InlayHintProvider.getInlayHints(uri, range).map(_.toJSON))
