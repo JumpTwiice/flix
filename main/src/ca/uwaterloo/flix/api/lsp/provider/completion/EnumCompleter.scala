@@ -29,21 +29,24 @@ object EnumCompleter {
     */
   def getCompletions(qn: Name.QName, range: Range, ap: AnchorPosition, scp: LocalScope, withTypeParameters: Boolean)(implicit root: TypedAst.Root): Iterable[Completion] = {
     if (qn.namespace.nonEmpty)
-      root.enums.values.collect{
+      root.enums.values.collect {
         case enum if CompletionUtils.isAvailable(enum) && CompletionUtils.matchesName(enum.sym, qn, qualified = true) =>
-          EnumCompletion(enum, range, ap, qualified = true, inScope = true, withTypeParameters = withTypeParameters)
+          val priority = Priority.Lower
+          EnumCompletion(enum, range, priority, ap, qualified = true, inScope = true, withTypeParameters = withTypeParameters)
       }
     else
       root.enums.values.collect({
         case enum if CompletionUtils.isAvailable(enum) && CompletionUtils.matchesName(enum.sym, qn, qualified = false) =>
-          EnumCompletion(enum, range, ap, qualified = false, inScope = inScope(enum, scp), withTypeParameters = withTypeParameters)
+          val s = inScope(enum, scp)
+          val priority = if (s) Priority.High else Priority.Lower
+          EnumCompletion(enum, range, priority, ap, qualified = false, inScope = s, withTypeParameters = withTypeParameters)
       })
   }
 
   /**
-   * Checks if the definition is in scope.
-   * If we can find the definition in the scope or the definition is in the root namespace, it is in scope.
-   */
+    * Checks if the definition is in scope.
+    * If we can find the definition in the scope or the definition is in the root namespace, it is in scope.
+    */
   private def inScope(decl: TypedAst.Enum, scope: LocalScope): Boolean = {
     val thisName = decl.sym.toString
     val isResolved = scope.m.values.exists(_.exists {

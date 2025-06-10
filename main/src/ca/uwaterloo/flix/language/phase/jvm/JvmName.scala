@@ -64,6 +64,12 @@ object JvmName {
   val ConstructorMethod: String = "<init>"
 
   /**
+    * The name of the static method for invoking the function
+    * if it is control pure.
+    */
+  val DirectApply: String = "directApply"
+
+  /**
     * Returns the JvmName of the given string `s`.
     */
   def mk(s: String): JvmName = {
@@ -86,7 +92,6 @@ object JvmName {
     * result in the string `"Tuple2$Obj$Int32$Obj"`.
     */
   def mkClassName(prefix: String, args: List[String]): String = {
-    // TODO: Should delimiter always be included?
     val cPrefix = mangle(prefix)
     if (args.isEmpty) s"$cPrefix${Flix.Delimiter}"
     else s"$cPrefix${Flix.Delimiter}${args.map(mangle).mkString(Flix.Delimiter)}"
@@ -101,7 +106,6 @@ object JvmName {
   /**
     * Performs name mangling on the given string `s` to avoid issues with special characters.
     */
-  // TODO: Magnus: Use this in appropriate places.
   def mangle(s: String): String = s.
     replace("+", Flix.Delimiter + "plus").
     replace("-", Flix.Delimiter + "minus").
@@ -133,8 +137,10 @@ object JvmName {
   val JavaUtilConcurrent: List[String] = JavaUtil ::: List("concurrent")
   val JavaUtilConcurrentLocks: List[String] = JavaUtilConcurrent ::: List("locks")
   val JavaUtilRegex: List[String] = JavaUtil ::: List("regex")
+  val JavaIO: List[String] = List("java", "io")
 
   val AtomicLong: JvmName = JvmName(JavaUtil ::: List("concurrent", "atomic"), "AtomicLong")
+  val Arrays: JvmName = JvmName(JavaUtil, "Arrays")
   val Boolean: JvmName = JvmName(JavaLang, "Boolean")
   val Byte: JvmName = JvmName(JavaLang, "Byte")
   val Character: JvmName = JvmName(JavaLang, "Character")
@@ -161,6 +167,7 @@ object JvmName {
   val ObjFunction: JvmName = JvmName(JavaUtilFunction, "Function")
   val ObjConsumer: JvmName = JvmName(JavaUtilFunction, "Consumer")
   val ObjPredicate: JvmName = JvmName(JavaUtilFunction, "Predicate")
+  val PrintStream: JvmName = JvmName(JavaIO, "PrintStream")
   val ReentrantLock: JvmName = JvmName(JavaUtilConcurrentLocks, "ReentrantLock")
   val Regex: JvmName = JvmName(JavaUtilRegex, "Pattern")
   val Runnable: JvmName = JvmName(JavaLang, "Runnable")
@@ -216,12 +223,7 @@ case class JvmName(pkg: List[String], name: String) {
   lazy val toPath: Path = Paths.get(pkg.mkString("/"), name + ".class")
 
   /**
-    * Wraps this name in `backendObjType.Native`.
-    */
-  def toObjTpe: BackendObjType.Native = BackendObjType.Native(this)
-
-  /**
     * Wraps this name in `BackendType.Reference(BackendObjType.Native(...))`.
     */
-  def toTpe: BackendType.Reference = this.toObjTpe.toTpe
+  def toTpe: BackendType.Reference = BackendObjType.Native(this).toTpe
 }

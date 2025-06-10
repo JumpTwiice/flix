@@ -16,6 +16,7 @@
 
 package ca.uwaterloo.flix.language.phase.jvm
 
+import ca.uwaterloo.flix.language.ast.SourceLocation
 import ca.uwaterloo.flix.language.phase.jvm.BytecodeInstructions.Branch.{FalseBranch, TrueBranch}
 import ca.uwaterloo.flix.language.phase.jvm.ClassMaker.*
 import ca.uwaterloo.flix.language.phase.jvm.JvmName.MethodDescriptor
@@ -33,6 +34,9 @@ object BytecodeInstructions {
   sealed class F(visitor: MethodVisitor) {
     def visitTypeInstruction(opcode: Int, tpe: JvmName): Unit =
       visitor.visitTypeInsn(opcode, tpe.toInternalName)
+
+    def visitTypeInstructionDirect(opcode: Int, tpe: String): Unit =
+      visitor.visitTypeInsn(opcode, tpe)
 
     def visitInstruction(opcode: Int): Unit = visitor.visitInsn(opcode)
 
@@ -55,8 +59,14 @@ object BytecodeInstructions {
     def visitLabel(label: Label): Unit =
       visitor.visitLabel(label)
 
+    def visitLineNumber(line: Int, label: Label): Unit =
+      visitor.visitLineNumber(line, label)
+
     def visitLoadConstantInstruction(v: Any): Unit =
       visitor.visitLdcInsn(v)
+
+    def visitIntInstruction(opcode: Int, v: Int): Unit =
+      visitor.visitIntInsn(opcode, v)
 
     def visitTryCatchBlock(beforeTry: Label, afterTry: Label, handlerStart: Label): Unit =
       visitor.visitTryCatchBlock(beforeTry, afterTry, handlerStart, null)
@@ -75,6 +85,12 @@ object BytecodeInstructions {
   implicit class ComposeOps(i1: InstructionSet) {
     def ~(i2: InstructionSet): InstructionSet =
       compose(i1, i2)
+  }
+
+  implicit class MethodEnricher(mv: MethodVisitor) {
+    def visitByteIns(ins: InstructionSet): Unit = {
+      ins(new F(mv))
+    }
   }
 
   sealed case class Handle(handle: asm.Handle)
@@ -177,6 +193,11 @@ object BytecodeInstructions {
 
   def ATHROW(): InstructionSet = f => {
     f.visitInstruction(Opcodes.ATHROW)
+    f
+  }
+
+  def BIPUSH(i: Byte): InstructionSet = f => {
+    f.visitIntInstruction(Opcodes.BIPUSH, i)
     f
   }
 
@@ -463,6 +484,11 @@ object BytecodeInstructions {
     f
   }
 
+  def SIPUSH(i: Short): InstructionSet = f => {
+    f.visitIntInstruction(Opcodes.SIPUSH, i)
+    f
+  }
+
   def SWAP(): InstructionSet = f => {
     f.visitInstruction(Opcodes.SWAP)
     f
@@ -471,6 +497,13 @@ object BytecodeInstructions {
   //
   // ~~~~~~~~~~~~~~~~~~~~~~~~~ Meta JVM Instructions ~~~~~~~~~~~~~~~~~~~~~~~~~~
   //
+
+  def addLoc(loc: SourceLocation): InstructionSet = f => {
+    val label = new Label()
+    f.visitLabel(label)
+    f.visitLineNumber(loc.beginLine, label)
+    f
+  }
 
   def branch(c: Condition)(cases: Branch => InstructionSet): InstructionSet = f0 => {
     var f = f0
@@ -485,6 +518,17 @@ object BytecodeInstructions {
     f = cases(TrueBranch)(f)
     f.visitLabel(skipLabel)
     f
+  }
+
+  def castIfNotPrim(tpe: BackendType): InstructionSet = {
+    tpe match {
+      case arr: BackendType.Array => f => {
+        f.visitTypeInstructionDirect(Opcodes.CHECKCAST, arr.toDescriptor)
+        f
+      }
+      case BackendType.Reference(ref) => CHECKCAST(ref.jvmName)
+      case _: BackendType.PrimitiveType => nop()
+    }
   }
 
   def cheat(command: MethodVisitor => Unit): InstructionSet = f => {
@@ -576,6 +620,33 @@ object BytecodeInstructions {
     f
   }
 
+  def pushInt(i: Int): InstructionSet = i match {
+    case -1 => ICONST_M1()
+    case 0 => ICONST_0()
+    case 1 => ICONST_1()
+    case 2 => ICONST_2()
+    case 3 => ICONST_3()
+    case 4 => ICONST_4()
+    case 5 => ICONST_5()
+    case _ if scala.Byte.MinValue <= i && i <= scala.Byte.MaxValue => BIPUSH(i.toByte)
+    case _ if scala.Short.MinValue <= i && i <= scala.Short.MaxValue => SIPUSH(i.toShort)
+    case _ => f => {
+      f.visitLoadConstantInstruction(i)
+      f
+    }
+  }
+
+  def pushLoc(loc: SourceLocation): InstructionSet = {
+    NEW(BackendObjType.ReifiedSourceLocation.jvmName) ~
+      DUP() ~
+      pushString(loc.source.name) ~
+      pushInt(loc.beginLine) ~
+      pushInt(loc.beginCol) ~
+      pushInt(loc.endLine) ~
+      pushInt(loc.endCol) ~
+      INVOKESPECIAL(BackendObjType.ReifiedSourceLocation.Constructor)
+  }
+
   def storeWithName(index: Int, tpe: BackendType)(body: Variable => InstructionSet): InstructionSet =
     xStore(tpe, index) ~ body(new Variable(tpe, index))
 
@@ -598,11 +669,36 @@ object BytecodeInstructions {
     var runningIndex = index
     val variables = tpes.map(tpe => {
       val variable = new Variable(tpe, runningIndex)
-      val stackSize = if (tpe.is64BitWidth) 2 else 1
-      runningIndex = runningIndex + stackSize
+      runningIndex = runningIndex + tpe.stackSlots
       variable
     })
     body(runningIndex, variables)
+  }
+
+  def xArrayLoad(elmTpe: BackendType): InstructionSet = elmTpe match {
+    case BackendType.Array(_) => cheat(_.visitInsn(Opcodes.AALOAD))
+    case BackendType.Reference(_) => cheat(_.visitInsn(Opcodes.AALOAD))
+    case BackendType.Bool => cheat(_.visitInsn(Opcodes.BALOAD))
+    case BackendType.Char => cheat(_.visitInsn(Opcodes.CALOAD))
+    case BackendType.Int8 => cheat(_.visitInsn(Opcodes.BALOAD))
+    case BackendType.Int16 => cheat(_.visitInsn(Opcodes.SALOAD))
+    case BackendType.Int32 => cheat(_.visitInsn(Opcodes.IALOAD))
+    case BackendType.Int64 => cheat(_.visitInsn(Opcodes.LALOAD))
+    case BackendType.Float32 => cheat(_.visitInsn(Opcodes.FALOAD))
+    case BackendType.Float64 => cheat(_.visitInsn(Opcodes.DALOAD))
+  }
+
+  def xArrayStore(elmTpe: BackendType): InstructionSet = elmTpe match {
+    case BackendType.Array(_) => cheat(_.visitInsn(Opcodes.AASTORE))
+    case BackendType.Reference(_) => cheat(_.visitInsn(Opcodes.AASTORE))
+    case BackendType.Bool => cheat(_.visitInsn(Opcodes.BASTORE))
+    case BackendType.Char => cheat(_.visitInsn(Opcodes.CASTORE))
+    case BackendType.Int8 => cheat(_.visitInsn(Opcodes.BASTORE))
+    case BackendType.Int16 => cheat(_.visitInsn(Opcodes.SASTORE))
+    case BackendType.Int32 => cheat(_.visitInsn(Opcodes.IASTORE))
+    case BackendType.Int64 => cheat(_.visitInsn(Opcodes.LASTORE))
+    case BackendType.Float32 => cheat(_.visitInsn(Opcodes.FASTORE))
+    case BackendType.Float64 => cheat(_.visitInsn(Opcodes.DASTORE))
   }
 
   def xLoad(tpe: BackendType, index: Int): InstructionSet = tpe match {
@@ -611,6 +707,21 @@ object BytecodeInstructions {
     case BackendType.Float32 => FLOAD(index)
     case BackendType.Float64 => DLOAD(index)
     case BackendType.Array(_) | BackendType.Reference(_) => ALOAD(index)
+  }
+
+  def xNewArray(elmTpe: BackendType): InstructionSet = elmTpe match {
+    case BackendType.Array(_) => cheat(mv => mv.visitTypeInsn(Opcodes.ANEWARRAY, elmTpe.toDescriptor))
+    case BackendType.Reference(ref) => ANEWARRAY(ref.jvmName)
+    case tpe: BackendType.PrimitiveType => tpe match {
+      case BackendType.Bool => cheat(_.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_BOOLEAN))
+      case BackendType.Char => cheat(_.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_CHAR))
+      case BackendType.Int8 => cheat(_.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_BYTE))
+      case BackendType.Int16 => cheat(_.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_SHORT))
+      case BackendType.Int32 => cheat(_.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_INT))
+      case BackendType.Int64 => cheat(_.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_LONG))
+      case BackendType.Float32 => cheat(_.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_FLOAT))
+      case BackendType.Float64 => cheat(_.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_DOUBLE))
+    }
   }
 
   /**
@@ -733,7 +844,7 @@ object BytecodeInstructions {
       */
     def mkString(prefix: Option[InstructionSet], suffix: Option[InstructionSet], length: Int, getNthString: Int => InstructionSet): InstructionSet = {
       // [] --> [new String[length]] // Referred to as `elms`.
-      cheat(mv => GenExpression.compileInt(length)(mv)) ~ ANEWARRAY(BackendObjType.String.jvmName) ~
+      pushInt(length) ~ ANEWARRAY(BackendObjType.String.jvmName) ~
       // [elms] --> [elms, -1] // Running index referred to as `i`.
       ICONST_M1() ~
       // [elms, -1] --> [elms, length]
