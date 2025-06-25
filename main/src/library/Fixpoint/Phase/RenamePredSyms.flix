@@ -26,18 +26,18 @@
 /// This purpose of this module is to transform `PredSym`s defined by `(name, id)`, to `PredSym`s
 /// uniquely defined by their `id`.
 ///
-mod Fixpoint3.Phase.RenamePredSyms {
+mod Fixpoint.Phase.RenamePredSyms {
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, BodyPredicate, BodyTerm, HeadTerm, Polarity, VarSym}
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom, Functional, Guard1, Guard2, Guard3, Guard4, Guard5}
-    use Fixpoint3.Ast.Ram.RelSym
+    use Fixpoint.Ast.Ram.RelSym
     use Fixpoint.Ast.Shared.{Denotation, isRelational, PredSym}
     use Fixpoint.Ast.Shared.PredSym.PredSym
-    use Fixpoint3.UniqueInts
-    use Fixpoint3.Util.getOrCrash
+    use Fixpoint.UniqueInts
+    use Fixpoint.Util.getOrCrash
 
     type alias FixInformation = Map[Int32, PredSym]
 
@@ -86,6 +86,14 @@ mod Fixpoint3.Phase.RenamePredSyms {
                 case RelSym.Symbol(p, arity, den) => Map.insert(RelSym.Symbol(transformer(p), arity, den), v, newMap)
             }, Map#{}, map) |> 
             Model
+        case Provenance(rules, model) => {
+            let transformer = mapBack(fixing);
+            let newRules = remapConstraints(rules, transformer);
+            Map.foldLeftWithKey(newMap -> predSym -> v -> 
+                Map.insert(transformer(predSym), v, newMap)
+            , Map#{}, model) |> 
+            Provenance(newRules)
+        }
         case _ => bug!("Bad argument of type 'Join' in PredSym renaming")
     }
     

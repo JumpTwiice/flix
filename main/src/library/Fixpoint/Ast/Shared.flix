@@ -1,6 +1,8 @@
 /*
  * Copyright 2021 Magnus Madsen
  * Copyright 2021 Benjamin Dahse
+ * Copyright 2025 Casper Dalgaard Nielsen
+ *                Adam Yasser Tallouzi
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +20,7 @@ mod Fixpoint.Ast.Shared {
 
     use Fixpoint.Boxable
     use Fixpoint.Boxed
+
 
     /////////////////////////////////////////////////////////////////////////////
     // Denotation                                                              //
@@ -57,7 +60,7 @@ mod Fixpoint.Ast.Shared {
     /// Returns a latticenal denotation associated with the type `t`.
     ///
     @Internal
-    pub def lattice(): Denotation[t] with LowerBound[t], JoinLattice[t], MeetLattice[t] =
+    pub def lattice(): Denotation[v] with LowerBound[v], JoinLattice[v], MeetLattice[v] =
         Denotation.Latticenal(
             LowerBound.minValue(),
             (x, y) -> PartialOrder.lessEqual(x, y),
@@ -91,7 +94,7 @@ mod Fixpoint.Ast.Shared {
 
     instance ToString[PredSym] {
         pub def toString(predSym: PredSym): String = match predSym {
-            case PredSym.PredSym(name, id) => if (id == 0i64) name else "${name}%${id}"
+            case PredSym.PredSym(name, id) => "${name}%${id}"
         }
     }
 

@@ -22,13 +22,13 @@
 ///
 /// Not thread-safe.
 ///
-mod Fixpoint3 {
+mod Fixpoint {
     struct Counter[r: Region] {
         mut state: Int32
     }
 
     mod Counter {
-        use Fixpoint3.Counter
+        use Fixpoint.Counter
 
         ///
         /// Returns a fresh `Counter` initialized to `0`.

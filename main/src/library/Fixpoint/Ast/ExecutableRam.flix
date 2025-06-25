@@ -20,10 +20,10 @@
 /// This representation is tightly coupled to the current interpreter.
 ///
 mod Fixpoint.Ast.ExecutableRam {
-    use Fixpoint3.Ast.Ram.{Predicates, RelSym, IndexInformation}
+    use Fixpoint.Ast.Ram.{Predicates, RelSym, IndexInformation}
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
-    use Fixpoint3.Boxed;
-    use Fixpoint3.BoxingType.{UnifiedTypePos, RamIdToPos};
+    use Fixpoint.Boxed;
+    use Fixpoint.BoxingType.{UnifiedTypePos, RamIdToPos};
 
     /////////////////////////////////////////////////////////////////////////////
     // RamProgram                                                              //
@@ -262,6 +262,9 @@ mod Fixpoint.Ast.ExecutableRam {
     ///
     /// `Lit(rep, val)` represents the literal `val` and its unboxed version, `rep`.
     ///
+    /// `ProvMax([(memPos1, i1), (memPos2, i2), ...])` represents 
+    /// `max(memory[memPos1][i1], memory[memPos2][i2], ...)`
+    ///
     /// `LoadFromTuple(memPos, i, unboxingInfo)` represents an index from the tuple stored at postion
     /// `memPos`, i.e. `memory[memPos][i]`. Can be boxed using `unboxingInfo`.
     ///
@@ -289,6 +292,7 @@ mod Fixpoint.Ast.ExecutableRam {
     @Internal
     pub enum RamTerm {
         case Lit(Int64, Boxed)
+        case ProvMax(Vector[(Int32, Int32)])
         case LoadFromTuple(Int32, Int32, UnifiedTypePos)
         case LoadLatVar(Int32, UnifiedTypePos)
         case Meet(Boxed -> Boxed  -> Boxed, RamTerm, RamTerm, UnifiedTypePos)
@@ -304,6 +308,9 @@ mod Fixpoint.Ast.ExecutableRam {
             case RamTerm.Lit(v, _) => "%{v}"
             case RamTerm.LoadFromTuple(tupleIndex, indexInTuple, _) => "x${tupleIndex}[${indexInTuple}]"
             case RamTerm.LoadLatVar(i, _) => "LoadLatVar[${i}]"
+            case RamTerm.ProvMax(loads) =>
+                let loadsStr = Vector.joinWith(match (rv, i) -> "${rv}[${i}]", ", ", loads);
+                "max(${loadsStr})"
             case RamTerm.Meet(_, lhs, rhs, _) => "(${lhs} ⊓ ${rhs})"
             case RamTerm.App1(_, v, _) => "<clo>(${v})"
             case RamTerm.App2(_, v1, v2, _) => "<clo>(${v1}, ${v2})"

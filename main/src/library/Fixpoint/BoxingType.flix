@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+ 
 ///
 /// The purpose of this file is to record the transformation from Boxed values to Int64.
 ///
@@ -44,16 +44,16 @@
 ///    Vector#{Lock1, Lock2},
 /// )
 /// ```
-/// We then store the fact that the type information about `A[0]` and `B[0]` are stored
+/// We then store the fact that the type information about `A[0]` and `B[0]` are stored 
 /// at `UnifiedTypePos` `0` and `A[1]` and `B[1]` are stored at position 1. We only need
-/// to keep the `MutList` and `BPlusTree` for objects, as transforming the simple types
+/// to keep the `MutList` and `BPlusTree` for objects, as transforming the simple types 
 /// requires less information.
 ///
-mod Fixpoint3.BoxingType {
-    use Fixpoint3.AtomicCounter
-    use Fixpoint3.ReadWriteLock
-    use Fixpoint3.Boxed
-    use Fixpoint3.Ast.Ram.RamId
+mod Fixpoint.BoxingType {
+    use Fixpoint.AtomicCounter
+    use Fixpoint.ReadWriteLock
+    use Fixpoint.Boxed
+    use Fixpoint.Ast.Ram.RamId
 
     ///
     /// `Types` represent the different types a program can contain.
@@ -64,16 +64,31 @@ mod Fixpoint3.BoxingType {
     ///
     @Internal
     pub enum Types {
-        case TyUnknown
-        case TyBool
-        case TyChar
-        case TyInt8
-        case TyInt16
-        case TyInt32
-        case TyInt64
-        case TyFloat32
-        case TyFloat64
-        case TyObject
+        case Unknown
+        case Bool
+        case Char
+        case Int8
+        case Int16
+        case Int32
+        case Int64
+        case Float32
+        case Float64
+        case Object
+    }
+
+    instance ToString[Types] {
+        pub def toString(t: Types): String = match t {
+        case Types.Unknown => "Unknown"
+        case Types.Bool    => "Bool"
+        case Types.Char    => "Char"
+        case Types.Int8    => "Int8"
+        case Types.Int16   => "Int16"
+        case Types.Int32   => "Int32"
+        case Types.Int64   => "Int64"
+        case Types.Float32 => "Float32"
+        case Types.Float64 => "Float64"
+        case Types.Object  => "Object"
+        }
     }
 
     ///
@@ -81,7 +96,7 @@ mod Fixpoint3.BoxingType {
     /// same type.
     ///
     @Internal
-    pub type alias UnifiedTypePos = Int32
+    pub type alias UnifiedTypePos = Int32    
 
     ///
     /// Maps `RamId`'s to the `UnifiedTypePos`. It facilitates getting the type
@@ -90,10 +105,10 @@ mod Fixpoint3.BoxingType {
     @Internal
     pub type alias RamIdToPos = Map[RamId, UnifiedTypePos]
 
-    ///
+    /// 
     /// Describes the type of values. The `UnifiedTypePos` describes where in `TypeInfo`
     /// the type of a specific value can be found.
-    ///
+    /// 
     type alias TypeInfo[r: Region] = Array[Types, r]
 
     ///
@@ -107,7 +122,7 @@ mod Fixpoint3.BoxingType {
     /// Return the type of value saved at `index` in `typeInfo`.
     ///
     @Internal
-    pub def getType(index: Int32, typeInfo: TypeInfo[r]): Types \ r =
+    pub def getType(index: Int32, typeInfo: TypeInfo[r]): Types \ r = 
         Array.get(index, typeInfo)
 
     ///
@@ -116,7 +131,7 @@ mod Fixpoint3.BoxingType {
     ///
     /// The i'th value of each Vector belongs to a specific `UnifiedTypePos`. The
     /// description of the values will be for some `i`.
-    ///
+    /// 
     /// `valueToRep` maps Boxed objects to their `Int64` representation.
     ///
     /// `values` contains the Boxed objects being stored.
@@ -126,10 +141,10 @@ mod Fixpoint3.BoxingType {
     ///
     /// Furthermore for lattice `Bot` should be represented by `0`.
     ///
-    /// `typeInfo[i]` records which type of values are associated with the information stored at `i`.
+    /// `typeInfo[i]` records which type of values are associated with the information stored at `i`. 
     /// If we have yet to meet any values associated with position `i`, `typeInfo[i]` will be `Unknown`.
     ///
-    /// `locks[i]` must be acquired before a specific `values[i]` can be interacted with.
+    /// `locks[i]` must be acquired before a specific `values[i]` can be interacted with. 
     ///
     @Internal
     pub type alias Boxing[r: Region] = (
@@ -138,5 +153,5 @@ mod Fixpoint3.BoxingType {
         TypeInfo[r],
         Vector[ReadWriteLock[r]]
     )
-
+    
 }

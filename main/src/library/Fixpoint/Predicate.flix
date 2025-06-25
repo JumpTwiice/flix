@@ -23,7 +23,7 @@
 ///
 /// The three `PredType`s originate from semi-naive evaluation and are `Full`, `Delta` and `New`
 /// (delta').
-/// 
+///
 /// Instead of adding an enum type (Full/Delta/New) to the predicate, we embed the type into
 /// the identifier, which we can do since we have an upper bound on the integers used.
 /// 
@@ -39,7 +39,7 @@
 ///
 /// In the above way `PredType` is encoded in the identifier of a `PredSym`.
 ///
-mod Fixpoint3.Predicate {
+mod Fixpoint.Predicate {
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.Ast.Datalog.Datalog.Datalog
@@ -47,8 +47,8 @@ mod Fixpoint3.Predicate {
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
     use Fixpoint.Ast.Datalog.BodyPredicate.{BodyAtom}
-    use Fixpoint3.Ast.Ram.{BoolExp, Facts, Predicates, RamProgram, RamStmt, RamTerm, RelOp, RelSym, RowVar, toId}
-    use Fixpoint3.Boxed
+    use Fixpoint.Ast.Ram.{BoolExp, Facts, Predicates, RamProgram, RamStmt, RamTerm, RelOp, RelSym, RowVar, toId}
+    use Fixpoint.Boxed
 
     ///
     /// `PredType` describes the three types of predicates that exists in a RAM program.

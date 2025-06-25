@@ -28,7 +28,7 @@
 /// the value, which `UniqueInts` assigned index `i`.
 ///
 
-mod Fixpoint3 {
+mod Fixpoint {
     @Internal
     struct UniqueInts[k: Type, r: Region] {
         map: MutMap[k, Int32, r],
@@ -36,8 +36,8 @@ mod Fixpoint3 {
     }
 
     mod UniqueInts {
-        use Fixpoint3.Counter
-        use Fixpoint3.UniqueInts
+        use Fixpoint.Counter
+        use Fixpoint.UniqueInts
 
         ///
         /// Returns an empty mapping from `k` to identifiers.

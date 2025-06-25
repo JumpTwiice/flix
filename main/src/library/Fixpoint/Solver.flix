@@ -1,5 +1,7 @@
 /*
  * Copyright 2021 Benjamin Dahse
+ * Copyright 2025 Casper Dalgaard Nielsen
+ *                Adam Yasser Tallouzi
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +16,36 @@
  * limitations under the License.
  */
 
-mod Fixpoint.Solver {
+mod Fixpoint.SolverApi {
+    use Fixpoint.BoxingType.{Boxing}
 
     import dev.flix.runtime.Global
 
     use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadTerm}
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
     use Fixpoint.Ast.Datalog.Constraint.Constraint
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
-    use Fixpoint.Ast.Ram.RamSym
-    use Fixpoint.Ast.Shared.BoxedDenotation
+    use Fixpoint.Ast.Ram.{RelSym, Predicates, RamProgram => ARamProgram}
+    use Fixpoint.Ast.ExecutableRam.{RamProgram => ERamProgram}
+    use Fixpoint.Ast.Shared.Denotation
     use Fixpoint.Ast.Shared.Denotation.{Relational, Latticenal}
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Ast.Shared.PredSym.PredSym
     use Fixpoint.Boxable.{box, unbox}
     use Fixpoint.Boxed
     use Fixpoint.Interpreter.Database
-    use Fixpoint3.Ast.Ram.RelSym
+    use Fixpoint.Util.getOrCrash
+
+    ///
+    /// For testing. Toggles between the normal solver and the provenance solver.
+    ///
+    @Internal
+    pub def runSolver(d: Datalog): Datalog =
+        if(Fixpoint.Options.useProvenance()) {
+            runProvSolver(d)
+        } else {
+            runSolverNoProv(d)
+        }
 
     ///
     /// Returns the minimal model of the given Datalog program `d`.
@@ -38,8 +53,35 @@ mod Fixpoint.Solver {
     /// The stratification is computed automatically by the solver.
     ///
     @Internal
-    pub def runSolver(d: Datalog): Datalog =
-        Fixpoint.Phase.Stratifier.stratify(d) |> runWithStratification(d)
+    pub def runSolverNoProv(d: Datalog): Datalog = region rc {
+        let (fixed, fixInfo) = Fixpoint.Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
+        let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
+        Fixpoint.Phase.RenamePredSyms.renamePredSyms(runWithStratification(fixed, strat, false), fixInfo)
+    }
+
+    ///
+    /// Returns the minimal model of the given Datalog program `d` with provenance
+    /// annotations to facilitate provenance queries.
+    ///
+    @Internal
+    pub def runProvSolver(d: Datalog): Datalog = region rc {
+        let (fixed, fixInfo) = Fixpoint.Phase.RenamePredSyms.assignUniqueIdentifiersToPredSyms(rc, d);
+        let strat = Fixpoint.Phase.Stratifier.stratify(fixed);
+        let provThing = runWithStratification(fixed, strat, true);
+        let goal = Vector#{Boxed.BoxedInt32(0), Boxed.BoxedInt32(10000)};
+        let goalSym = PredSym.PredSym("Path", 2i64);
+        let mapping = x -> match x {
+            case PredSym.PredSym("Path", _) => Some(1)
+            case _ => None
+        };
+        let forcedEval = provOf(goal, goalSym, d, ???);
+        // let forcedEval = Fixpoint.Provenance.provQuery(goal, goalSym, provThing);
+        if(Option.isEmpty(forcedEval)) {
+            Fixpoint.Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
+        } else {
+            Fixpoint.Phase.RenamePredSyms.renamePredSyms(provThing, fixInfo)
+        }
+    }
 
     ///
     /// Returns the minimal model of the given Datalog program `d`.
@@ -47,29 +89,57 @@ mod Fixpoint.Solver {
     /// A stratification of `d` is given by `stf`.
     ///
     @Internal
-    def runWithStratification(d0: Datalog, stf: Map[PredSym, Int32]): Datalog = {
+    def runWithStratification(d0: Datalog, stf: Map[PredSym, (Int32, Int32)], withProv: Bool): Datalog = region rc {
         let d = Fixpoint.Debugging.notifyPreSolve(d0);
-        def compiler(cs: Datalog) = {
-            Fixpoint.Phase.Compiler.compile(cs, stf)
-            |> Fixpoint.Phase.Simplifier.simplifyStmt
-            |> Fixpoint.Phase.IndexSelection.queryStmt
-            |> Fixpoint.Phase.VarsToIndices.lowerStmt
+        // Some of this code is duplicated in `runJoinProfiler`.
+        def compiler(cs: Datalog, db: Map[RelSym, Map[Vector[Boxed], Boxed]]): (ERamProgram, Boxing[rc]) \ rc = {
+            Fixpoint.Phase.Compiler.compile(cs, db, stf) |>
+            Fixpoint.Debugging.notifyPreLowering("Compiler") |>
+            Fixpoint.Phase.Simplifier.simplifyProgram |>
+            Fixpoint.Debugging.notifyPreLowering("Simplifier") |>
+            Fixpoint.Phase.JoinOptimizer.scheduleProgram |>
+            Fixpoint.Debugging.notifyPreLowering("Join Optimizer") |>
+            Fixpoint.Phase.Hoisting.hoistProgram |>
+            Fixpoint.Debugging.notifyPreLowering("Hoisting") |>
+            Fixpoint.Phase.IndexSelection.indexProgram |>
+            Fixpoint.Debugging.notifyPreLowering("Index Selection") |>
+            Fixpoint.Phase.Provenance.augmentProgram(withProv) |>
+            Fixpoint.Phase.Lowering.lowerProgram(rc)
         };
         let model = match d {
-            case Datalog(_, _) => region rc {
-                compiler(d) |> Fixpoint.Interpreter.interpret(rc) |> toModel
-            }
-            case Model(_) => d
-            case Join(Model(m_), cs) => region rc {
-                let m = Map.foldRightWithKey(match RelSym.Symbol(pred, arr, den) -> v -> Map.insert(RamSym.Full(pred, arr, den), v), Map#{}, m_);
-                let db = Map.map(Map.toMutMap(rc), m) |> Map.toMutMap(rc);
-                compiler(cs) |> Fixpoint.Interpreter.interpretWithDatabase(rc, db) |> toModel
-            }
-            case _ => bug!("Datalog normalization bug")
+            case Datalog(_, r) =>
+                compiler(d, Map.empty()) |>  
+                Fixpoint.Debugging.notifyPreInterpret |>
+                Fixpoint.Interpreter.interpret(rc) |> 
+                toModelWithoutFull(withProv, r)
+            case Model(_) => 
+                d
+            case Provenance(_, _) => 
+                d
+            case Join(Model(m), Datalog(f, r)) => 
+                let cs = Datalog(f, r);
+                compiler(cs, m) |> 
+                Fixpoint.Debugging.notifyPreInterpret |>
+                Fixpoint.Interpreter.interpret(rc) |> 
+                toModelWithoutFull(withProv, r)
+            case Join(Provenance(_, _), cs) => ???
+            case _ => bug!("Datalog Boxing bug")
         };
         let m = Fixpoint.Debugging.notifyPostSolve(model);
         m
     }
+
+    @Internal
+    pub def runJoinProfiler(program: ARamProgram): Vector[Vector[(Int32, Int32)]] = region rc {
+        let expectedJoinSize = 
+            program |> 
+            Fixpoint.Phase.Hoisting.hoistProgram |> 
+            Fixpoint.Phase.IndexSelection.indexProgram |> 
+            Fixpoint.Phase.Lowering.lowerProgram(rc) |>
+            Fixpoint.Interpreter.estimateJoinSizes(rc);
+        expectedJoinSize |> Array.map(rc, MutList.toVector) |> Array.toVector
+    }
+
 
     ///
     /// Returns the pairwise union of `d1` and `d2`.
@@ -81,7 +151,7 @@ mod Fixpoint.Solver {
         case (Datalog(edb1, idb1), Datalog(edb2, idb2)) =>
             Datalog(Vector.append(edb1, edb2), Vector.append(idb1, idb2))
         case (Model(db1), Model(db2)) =>
-            use Fixpoint3.Ast.Ram.toDenotation;
+            use Fixpoint.Ast.Ram.toDenotation;
             let union = ramSym -> match toDenotation(ramSym) {
                 case Relational => Map.union
                 case Latticenal(_, _, lub, _) => Map.unionWith(lub)
@@ -94,6 +164,44 @@ mod Fixpoint.Solver {
         case (Join(model, datalog), Model(_)) => Join(union(model, d2), datalog)
         case (Model(_), Join(model, datalog)) => Join(union(model, d1), datalog)
         case (Join(x, y), Join(z, w)) => Join(union(x, z), union(y, w))
+        case (Provenance(_, _), _) => union(provenanceToModel(d1), d2)
+        case (_, Provenance(_, _)) =>  union(d1, provenanceToModel(d2))
+    }
+
+    def provenanceToModel(d: Datalog): Datalog = match d {
+        case Provenance(_, facts) =>
+            Map.foldLeftWithKey(acc -> predSym -> factMap -> match Map.find(_ -> _ -> true, factMap) {
+                case None => acc
+                case Some((v, _)) =>
+                    let relSym = RelSym.Symbol(predSym, Vector.length(v), Relational);
+                    let innerMap = Map.map(_ -> Boxed.NoValue, factMap);
+                    Map.insert(relSym, innerMap, acc)
+            }, Map#{}, facts) |> Model
+        case _ => unreachable!()
+    }
+
+    ///
+    /// Return the provenance of the fact `f` of relation `p` given Datalog program `d`.
+    ///
+    @Internal
+    pub def provOf(goal: Vector[Boxed], p: PredSym, d: Datalog, mapping: PredSym -> Vector[Boxed] -> t): Option[List[t]] = match d {
+        case Datalog(_, _) =>
+            provOf(goal, p, runProvSolver(d), mapping)
+        case Model(db) =>
+        // This is a dirty hack based on the implementation of Order on RelSym (it only depends on PredSym).
+        let fakeRelSym = RelSym.Symbol(p, -1, Relational);
+        match Map.get(fakeRelSym, db) {
+            case None => None
+            case Some(facts) => match Map.memberOf(goal, facts) {
+                case false => None
+                case true => Some(mapping(p, goal) :: Nil)
+            }
+        }
+        case Provenance(_, _) =>
+            Fixpoint.Provenance.provQuery(p, goal, d) |>
+            Option.map(List.map(match (pred, fact) -> mapping(pred, fact)))
+        case Join(_, _) =>
+            provOf(goal, p, runProvSolver(d), mapping)
     }
 
     ///
@@ -114,6 +222,10 @@ mod Fixpoint.Solver {
             }, db) |>
             List.toMap |>
             Model
+        case Provenance(rules, db) => match Map.get(p, db) {
+            case None => Provenance(rules, Map#{})
+            case Some(v) => Provenance(rules, Map#{p => v})
+        }
         case Join(d1, d2) => union(projectSym(p, d1), projectSym(p, d2))
     }
 
@@ -500,7 +612,7 @@ mod Fixpoint.Solver {
             Foldable.foldLeft(() -> t -> {
                 let vs = f(t);
                 let arity = List.length(vs);
-                let ramSym = RamSym.Full(p, arity, Relational);
+                let ramSym = RelSym.Symbol(p, arity, Relational);
                 let rel = MutMap.getOrElsePut(ramSym, MutMap.empty(rc), db);
                 MutMap.put(List.toVector(vs), Reflect.default(), rel)
             }, (), ts);
@@ -712,7 +824,7 @@ mod Fixpoint.Solver {
             pFacts |> MutList.toVector
         }
         case Model(db) => region rc {
-            use Fixpoint3.Ast.Ram.toDenotation;
+            use Fixpoint.Ast.Ram.toDenotation;
             let pFacts = MutList.empty(rc);
             let qquery = ramSym -> match ramSym {
                 case RelSym.Symbol(predSym, _, _) => match predSym <=> p {
@@ -739,6 +851,10 @@ mod Fixpoint.Solver {
             pFacts |> MutList.toVector
         }
         case Join(d1, d2) => Vector.append(factsOf(f, p, d1), factsOf(f, p, d2))
+        case Provenance(_, db) => match Map.get(p, db) {
+            case None => Vector#{}
+            case Some(facts) => facts |> Map.keysOf |> Set.toVector |> Vector.map(Vector.toList >> f)
+        }
     }
 
     ///
@@ -751,15 +867,45 @@ mod Fixpoint.Solver {
         case _               => bug!("Unexpected non-value term.")
     }
 
+
+    ///
+    /// Returns the given database `db` as a Datalog value.
+    ///
+    def toModelWithoutFull(withProv: Bool, rules: Vector[Constraint], dbMeta: (Database[r], Predicates)): Datalog \ r =
+        let (db, meta) = dbMeta;
+        let dbOnlyFullRels = MutMap.toMap(db) |>
+        Map.map(MutMap.toMap) |>
+        Map.filterWithKey(k -> facts -> match k {
+            case RelSym.Symbol(PredSym(_, id), _, _) => Fixpoint.Predicate.isFullId(id, meta) and Map.nonEmpty(facts)
+        });
+        if(withProv) {
+            toProvenance(rules, dbOnlyFullRels)
+        } else {
+            Model(dbOnlyFullRels)
+        }
+
+    ///
+    /// Returns the given database `db` augmented with provenance as a Provenance value.
+    ///
+    def toProvenance(rules: Vector[Constraint], db: Map[RelSym, Map[Vector[Boxed], Boxed]]): Datalog =
+        let res = db |>
+        Map.foldLeftWithKey(acc -> match RelSym.Symbol(predSym, _, _) -> facts -> {
+            let len = Vector.length(fst(getOrCrash(Map.find(_ -> _ -> true, facts))));
+            let compiledFacts = facts |> Map.foldLeftWithKey(innerAcc -> fact -> _ -> {
+                let (rawFact, annotation) = Vector.splitAt(len - 2, fact);
+                Map.insert(rawFact, (unbox(Vector.get(0, annotation)), getOrCrash(Int64.tryToInt32(unbox(Vector.get(1, annotation))))), innerAcc)
+            }, Map#{});
+            Map.insert(predSym, compiledFacts, acc)
+        }, Map#{}) |>
+        Provenance(rules);
+        res
+
     ///
     /// Returns the given database `db` as a Datalog value.
     ///
     def toModel(db: Database[r]): Datalog \ r =
-        db |> 
-        MutMap.foldRightWithKey(k -> v -> match k {
-            case RamSym.Full(pred, arr, den) => Map.insert(RelSym.Symbol(pred, arr, den), v)
-            case _ => identity
-        }, Map#{}) |>
+        MutMap.toMap(db) |>
         Map.map(MutMap.toMap) |>
         Model
+
 }

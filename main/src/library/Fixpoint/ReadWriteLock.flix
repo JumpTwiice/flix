@@ -18,7 +18,7 @@
 /// 
 /// A wrapper around a Java read-write-lock.
 ///
-mod Fixpoint3 {
+mod Fixpoint {
     import java.util.concurrent.locks.{ReadWriteLock => JReadWriteLock}
 
     @Internal
@@ -26,7 +26,7 @@ mod Fixpoint3 {
 
     mod ReadWriteLock {
         import java.util.concurrent.locks.{StampedLock => JStampedLock}
-        use Fixpoint3.ReadWriteLock
+        use Fixpoint.ReadWriteLock
 
         pub def mkLock(_: Region[r]): ReadWriteLock[r] \ r =
             ReadWriteLock(unchecked_cast((new JStampedLock().asReadWriteLock(): _ \ IO) as _ \ r))

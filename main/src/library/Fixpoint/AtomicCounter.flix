@@ -18,14 +18,14 @@
 /// 
 /// A thread-safe counter producing `Int64`.
 /// 
-mod Fixpoint3 {
+mod Fixpoint {
     import java.util.concurrent.atomic.{AtomicLong => JAtomicLong}
 
     enum AtomicCounter[_: Region](JAtomicLong)
 
     mod AtomicCounter {
         import java.util.concurrent.atomic.{AtomicLong => JAtomicLong}
-        use Fixpoint3.AtomicCounter
+        use Fixpoint.AtomicCounter
 
         ///
         /// Returns a fresh counter with initialized to `initialVal`.

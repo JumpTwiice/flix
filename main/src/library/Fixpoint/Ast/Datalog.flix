@@ -1,6 +1,8 @@
 /*
  * Copyright 2021 Benjamin Dahse
  * Copyright 2022 Jonathan Lindegaard Starup
+ * Copyright 2025 Casper Dalgaard Nielsen
+ *                Adam Yasser Tallouzi
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +18,38 @@
  */
 
 mod Fixpoint.Ast.Datalog {
+    use Fixpoint.Boxed;
 
     use Fixpoint.PredSymsOf
     use Fixpoint.PredSymsOf.predSymsOf
     use Fixpoint.SubstitutePredSym
     use Fixpoint.SubstitutePredSym.substitute
-    use Fixpoint.Ast.Shared.{Denotation, PredSym}
+    use Fixpoint.Ast.Ram.RelSym
     use Fixpoint.Ast.Shared.{BoxedDenotation => Denotation}
-    use Fixpoint.Boxed
-    use Fixpoint3.Ast.Ram.RelSym
+    use Fixpoint.Ast.Shared.Denotation.{Latticenal, Relational}
+    use Fixpoint.Ast.Shared.PredSym
 
     /////////////////////////////////////////////////////////////////////////////
     // Datalog                                                                 //
     /////////////////////////////////////////////////////////////////////////////
 
+    ///
+    /// `Datalog(facts, rules)` is a Datalog program where `facts` and `rules` are the
+    /// facts and rules of the program, respectively.
+    ///
+    /// `Model(factsMap)` is a 
+    ///
+    /// `Join(p1, p2)` is the combination of Datalog programs `p1` and `p2`.
+    ///
+    /// `Provenance(facts, model)` is a Datalog model where `model` is a map from
+    /// computed facts to annotations of the form `(depth, ruleUsed)`.
+    ///
     @Internal
     pub enum Datalog {
         case Datalog(Vector[Constraint], Vector[Constraint])
         case Model(Map[RelSym, Map[Vector[Boxed], Boxed]])
         case Join(Datalog, Datalog)
+        case Provenance(Vector[Constraint], Map[PredSym, Map[Vector[Boxed], (Int64, Int32)]])
     }
 
     instance PredSymsOf[Datalog] {
@@ -45,6 +60,7 @@ mod Fixpoint.Ast.Datalog {
                 factSyms ++ ruleSyms
             case Datalog.Model(m)              => Map.keysOf(m) |> Set.toList |> List.map(predSymsOf) |> Monoid.fold
             case Datalog.Join(v1, v2)          => predSymsOf(v1) ++ predSymsOf(v2)
+            case Datalog.Provenance(_, _)      => ???
         }
     }
 
@@ -61,37 +77,56 @@ mod Fixpoint.Ast.Datalog {
                 };
                 Datalog.Model(Map.foldLeftWithKey(f, Map.empty(), m))
             case Datalog.Join(v1, v2) => Datalog.Join(substitute(v1, s), substitute(v2, s))
+            case Datalog.Provenance(_, _) => ???
         }
     }
 
     instance ToString[Datalog] {
         pub def toString(cs: Datalog): String = match cs {
             case Datalog.Datalog(facts, rules) => region rc {
-                Iterator.append(Vector.iterator(rc, facts), Vector.iterator(rc, rules))
-                    |> Iterator.join(String.lineSeparator())
+                if(not Fixpoint.Options.enableDebugPrintFacts()) {
+                    "Printing facts disabled ${String.lineSeparator()}" + 
+                    Vector.iterator(rc, rules)
+                        |> Iterator.join(String.lineSeparator())
+                } else {
+                    Iterator.append(Vector.iterator(rc, facts), Vector.iterator(rc, rules))
+                        |> Iterator.join(String.lineSeparator())
+                }
             }
             case Datalog.Model(db) => region rc {
-                use Fixpoint3.Ast.Ram.toDenotation;
-                Map.iterator(rc, db)
-                    |> Iterator.flatMap(match (relSym, rel) -> {
-                        Map.iterator(rc, rel) |> Iterator.map(match (tuple, lat) -> {
-                            let tupleString = tuple |> Vector.map(Debug.stringify) |> Vector.join(", ");
-                            match toDenotation(relSym) {
-                                case Denotation.Relational => "${relSym}(${tupleString})."
-                                case Denotation.Latticenal(_, _, _, _) => "${relSym}(${tupleString}; %{lat})."
-                            }
+                use Fixpoint.Ast.Ram.toDenotation;
+                if(not Fixpoint.Options.enableDebugPrintFacts()) {
+                    "Printing facts disabled."
+                } else {
+                    Map.iterator(rc, db)
+                        |> Iterator.flatMap(match (ramSym, rel) -> {
+                            Map.iterator(rc, rel) |> Iterator.map(match (tuple, lat) -> {
+                                let tupleString = tuple |> Vector.map(Debug.stringify) |> Vector.join(", ");
+                                match toDenotation(ramSym) {
+                                    case Relational => "${ramSym}(${tupleString})."
+                                    case Latticenal(_, _, _, _) => "${ramSym}(${tupleString}; %{lat})."
+                                }
+                            })
                         })
-                    })
-                    |> Iterator.join(String.lineSeparator())
-                    + String.lineSeparator()
+                        |> Iterator.join(String.lineSeparator())
+                        + String.lineSeparator()
+                }
             }
             case Datalog.Join(d1, d2) => {
                 let lineSep = String.lineSeparator();
                 "${d1}${lineSep}${d2}${lineSep}"
             }
+            case Datalog.Provenance(_, db) =>
+                let indent = String.repeat(4, " ");
+                Map.joinWith(predSym -> facts -> {
+                    let factsString = Map.joinWith(fact -> annotation -> {
+                        "${indent}${fact} @ ${annotation}"
+                    }, "$,{String.lineSeparator()}${indent}", facts);
+                    "${predSym}:${String.lineSeparator()}${factsString}"
+                }, "${String.lineSeparator()}", db)
         }
     }
-
+    
     /////////////////////////////////////////////////////////////////////////////
     // Constraint                                                              //
     /////////////////////////////////////////////////////////////////////////////
@@ -156,8 +191,8 @@ mod Fixpoint.Ast.Datalog {
     instance ToString[HeadPredicate] {
         pub def toString(head: HeadPredicate): String =
             match head {
-                case HeadPredicate.HeadAtom(predSym, Denotation.Relational, terms) => "${predSym}(${terms |> Vector.join(", ")})"
-                case HeadPredicate.HeadAtom(predSym, Denotation.Latticenal(_, _, _, _), terms) =>
+                case HeadPredicate.HeadAtom(predSym, Relational, terms) => "${predSym}(${terms |> Vector.join(", ")})"
+                case HeadPredicate.HeadAtom(predSym, Latticenal(_, _, _, _), terms) =>
                     let (keyTerms, latticeTerms) = Vector.splitAt(Vector.length(terms)-1, terms);
                     match Vector.head(latticeTerms) {
                         case None    => "${predSym}(${keyTerms |> Vector.join(", ")})"
@@ -176,10 +211,10 @@ mod Fixpoint.Ast.Datalog {
         case Functional(Vector[VarSym], Vector[Boxed] -> Vector[Vector[Boxed]], Vector[VarSym])
         case Guard0(Unit -> Bool)
         case Guard1(Boxed -> Bool, VarSym)
-        case Guard2(Boxed -> Boxed-> Bool, VarSym, VarSym)
-        case Guard3(Boxed -> Boxed-> Boxed-> Bool, VarSym, VarSym, VarSym)
-        case Guard4(Boxed -> Boxed-> Boxed-> Boxed-> Bool, VarSym, VarSym, VarSym, VarSym)
-        case Guard5(Boxed -> Boxed-> Boxed-> Boxed-> Boxed-> Bool, VarSym, VarSym, VarSym, VarSym, VarSym)
+        case Guard2(Boxed -> Boxed -> Bool, VarSym, VarSym)
+        case Guard3(Boxed -> Boxed -> Boxed -> Bool, VarSym, VarSym, VarSym)
+        case Guard4(Boxed -> Boxed -> Boxed -> Boxed -> Bool, VarSym, VarSym, VarSym, VarSym)
+        case Guard5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Bool, VarSym, VarSym, VarSym, VarSym, VarSym)
     }
 
     instance PredSymsOf[BodyPredicate] {
@@ -209,9 +244,9 @@ mod Fixpoint.Ast.Datalog {
                 case Fixity.Loose => ""
             };
             match body {
-                case BodyPredicate.BodyAtom(predSym, Denotation.Relational, p, f, terms) =>
+                case BodyPredicate.BodyAtom(predSym, Relational, p, f, terms) =>
                     "${polarityPrefix(p)}${fixityPrefix(f)}${predSym}(${terms |> Vector.join(", ")})"
-                case BodyPredicate.BodyAtom(predSym, Denotation.Latticenal(_, _, _, _), p, f, terms) =>
+                case BodyPredicate.BodyAtom(predSym, Latticenal(_, _, _, _), p, f, terms) =>
                     let n = Vector.length(terms)-1;
                     let (keyTerms, latticeTerms) = (Vector.take(n, terms), Vector.drop(n, terms));
                     match Vector.head(latticeTerms) {
@@ -238,10 +273,10 @@ mod Fixpoint.Ast.Datalog {
         case Lit(Boxed)
         case App0(Unit -> Boxed)
         case App1(Boxed -> Boxed, VarSym)
-        case App2(Boxed -> Boxed-> Boxed, VarSym, VarSym)
-        case App3(Boxed -> Boxed-> Boxed-> Boxed, VarSym, VarSym, VarSym)
-        case App4(Boxed -> Boxed-> Boxed-> Boxed-> Boxed, VarSym, VarSym, VarSym, VarSym)
-        case App5(Boxed -> Boxed-> Boxed-> Boxed-> Boxed-> Boxed, VarSym, VarSym, VarSym, VarSym, VarSym)
+        case App2(Boxed -> Boxed -> Boxed, VarSym, VarSym)
+        case App3(Boxed -> Boxed -> Boxed -> Boxed, VarSym, VarSym, VarSym)
+        case App4(Boxed -> Boxed -> Boxed -> Boxed -> Boxed, VarSym, VarSym, VarSym, VarSym)
+        case App5(Boxed -> Boxed -> Boxed -> Boxed -> Boxed -> Boxed, VarSym, VarSym, VarSym, VarSym, VarSym)
     }
 
     instance ToString[HeadTerm] {

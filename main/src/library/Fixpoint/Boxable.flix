@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 mod Fixpoint.Boxable {
-
     import java.lang.Object
 
     use Vector.get
