@@ -283,6 +283,7 @@ class Flix {
     "Fixpoint3/Ast/Ram.flix" -> LocalResource.get("/src/library/Fixpoint3/Ast/Ram.flix"),
     "Fixpoint3/Ast/ExecutableRam.flix" -> LocalResource.get("/src/library/Fixpoint3/Ast/ExecutableRam.flix"),
 
+    "Fixpoint3/Phase/Hoisting.flix" -> LocalResource.get("/src/library/Fixpoint3/Phase/Hoisting.flix"),
     "Fixpoint3/Phase/RenamePredSyms.flix" -> LocalResource.get("/src/library/Fixpoint3/Phase/RenamePredSyms.flix"),
 
     "Abort.flix" -> LocalResource.get("/src/library/Abort.flix"),
