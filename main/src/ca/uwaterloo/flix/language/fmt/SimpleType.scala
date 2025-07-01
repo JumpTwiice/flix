@@ -505,26 +505,14 @@ object SimpleType {
         case TypeConstructor.Tuple(l) =>
           val tpes = t.typeArguments.map(visit).padTo(l, Hole)
           Tuple(tpes)
-        case TypeConstructor.Relation =>
-          val args = t.typeArguments.map(visit)
-          args match {
-            case Nil => RelationConstructor
-            case tpe :: Nil => Relation(destructTuple(tpe))
-            case _ :: _ :: _ => throw new OverAppliedType(t.loc)
-          }
-        case TypeConstructor.Lattice =>
-          val args = t.typeArguments.map(visit)
-          args match {
-            case Nil => LatticeConstructor
-            case tpe :: Nil =>
-              val tpesAndLat = destructTuple(tpe)
-              // NB: safe to take init/last since every lattice has a lattice field
-              // MATT not safe in case of alias!
-              val tpes = tpesAndLat.init
-              val lat = tpesAndLat.last
-              Lattice(tpes, lat)
-            case _ :: _ :: _ => throw new OverAppliedType(t.loc)
-          }
+        case TypeConstructor.Relation(l) =>
+          val tpes = t.typeArguments.map(visit).padTo(l, Hole)
+          Relation(tpes)
+        case TypeConstructor.Lattice(l) =>
+          val tpesAndLat = t.typeArguments.map(visit).padTo(l, Hole)
+          val tpes = tpesAndLat.init
+          val lat = tpesAndLat.last
+          Lattice(tpes, lat)
         case TypeConstructor.Pure => Pure
         case TypeConstructor.Univ => Univ
 
@@ -638,7 +626,7 @@ object SimpleType {
             case _ => throw new OverAppliedType(t.loc)
           }
 
-        case TypeConstructor.Effect(sym) => mkApply(SimpleType.Name(sym.name), t.typeArguments.map(visit))
+        case TypeConstructor.Effect(sym, _) => mkApply(SimpleType.Name(sym.name), t.typeArguments.map(visit))
         case TypeConstructor.Region(sym) => mkApply(SimpleType.Region(sym.text), t.typeArguments.map(visit))
         case TypeConstructor.RegionToStar => mkApply(RegionToStar, t.typeArguments.map(visit))
         case TypeConstructor.RegionWithoutRegion => mkApply(RegionWithoutRegion, t.typeArguments.map(visit))

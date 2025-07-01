@@ -76,6 +76,7 @@ object Redundancy {
       checkUnusedTypeParamsEnums()(root) ++
       checkUnusedStructsAndFields()(sctx, root) ++
       checkUnusedTypeParamsStructs()(root) ++
+      checkUnusedTypeParamsTypeAliases()(root) ++
       checkRedundantTraitConstraints()(root, flix)
 
     (root, errors)
@@ -135,6 +136,23 @@ object Redundancy {
       val usedTypeVars = decl.cases.foldLeft(Set.empty[Symbol.KindedTypeVarSym]) {
         case (sacc, (_, Case(_, tpes, _, _))) => sacc ++ tpes.flatMap(_.typeVars.map(_.sym))
       }
+      val unusedTypeParams = decl.tparams.filter {
+        tparam =>
+          !usedTypeVars.contains(tparam.sym) &&
+            !tparam.name.name.startsWith("_")
+      }
+      result ++= unusedTypeParams.map(tparam => UnusedTypeParam(tparam.name, tparam.loc))
+    }
+    result.toList
+  }
+
+  /**
+    * Checks for unused type parameters in enums.
+    */
+  private def checkUnusedTypeParamsTypeAliases()(implicit root: Root): List[RedundancyError] = {
+    val result = new ListBuffer[RedundancyError]
+    for ((_, decl) <- root.typeAliases) {
+      val usedTypeVars = decl.tpe.typeVars.map(_.sym)
       val unusedTypeParams = decl.tparams.filter {
         tparam =>
           !usedTypeVars.contains(tparam.sym) &&
@@ -355,6 +373,10 @@ object Redundancy {
       } else {
         Used.of(sym) ++ visitExps(exps, env0, rc)
       }
+
+    case Expr.ApplyOp(opUse, exps, _, _, _) =>
+      sctx.effSyms.put(opUse.sym.eff, ())
+      visitExps(exps, env0, rc)
 
     case Expr.ApplySig(SigSymUse(sym, _), exps, _, _, _, _) =>
       // Recursive calls do not count as uses.
@@ -713,10 +735,6 @@ object Redundancy {
 
     case Expr.RunWith(exp1, exp2, _, _, _) =>
       visitExp(exp1, env0, rc) ++ visitExp(exp2, env0, rc)
-
-    case Expr.Do(opUse, exps, _, _, _) =>
-      sctx.effSyms.put(opUse.sym.eff, ())
-      visitExps(exps, env0, rc)
 
     case Expr.InvokeConstructor(_, args, _, _, _) =>
       visitExps(args, env0, rc)
@@ -1307,7 +1325,7 @@ object Redundancy {
     */
   private case class SharedContext(defSyms: ConcurrentHashMap[Symbol.DefnSym, Unit],
                                    sigSyms: ConcurrentHashMap[Symbol.SigSym, Unit],
-                                   effSyms: ConcurrentHashMap[Symbol.EffectSym, Unit],
+                                   effSyms: ConcurrentHashMap[Symbol.EffSym, Unit],
                                    structSyms: ConcurrentHashMap[Symbol.StructSym, Unit],
                                    structFieldSyms: ConcurrentHashMap[Symbol.StructFieldSym, Unit],
                                    enumSyms: ConcurrentHashMap[Symbol.EnumSym, Unit],

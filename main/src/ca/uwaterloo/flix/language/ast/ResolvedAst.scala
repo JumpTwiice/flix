@@ -33,7 +33,7 @@ object ResolvedAst {
                   enums: Map[Symbol.EnumSym, Declaration.Enum],
                   structs: Map[Symbol.StructSym, Declaration.Struct],
                   restrictableEnums: Map[Symbol.RestrictableEnumSym, Declaration.RestrictableEnum],
-                  effects: Map[Symbol.EffectSym, Declaration.Effect],
+                  effects: Map[Symbol.EffSym, Declaration.Effect],
                   typeAliases: Map[Symbol.TypeAliasSym, Declaration.TypeAlias],
                   uses: ListMap[Symbol.ModuleSym, UseOrImport],
                   taOrder: List[Symbol.TypeAliasSym],
@@ -76,7 +76,7 @@ object ResolvedAst {
 
     case class AssocTypeDef(doc: Doc, mod: Modifiers, symUse: AssocTypeSymUse, arg: UnkindedType, tpe: UnkindedType, loc: SourceLocation) extends Declaration
 
-    case class Effect(doc: Doc, ann: Annotations, mod: Modifiers, sym: Symbol.EffectSym, ops: List[Declaration.Op], loc: SourceLocation) extends Declaration
+    case class Effect(doc: Doc, ann: Annotations, mod: Modifiers, sym: Symbol.EffSym, tparams: List[TypeParam], ops: List[Declaration.Op], loc: SourceLocation) extends Declaration
 
     case class Op(sym: Symbol.OpSym, spec: Spec, loc: SourceLocation) extends Declaration
   }
@@ -106,6 +106,8 @@ object ResolvedAst {
     case class ApplyDef(symUse: DefSymUse, exps: List[Expr], loc: SourceLocation) extends Expr
 
     case class ApplyLocalDef(symUse: LocalDefSymUse, exps: List[Expr], loc: SourceLocation) extends Expr
+
+    case class ApplyOp(symUse: OpSymUse, exps: List[Expr], loc: SourceLocation) extends Expr
 
     case class ApplySig(symUse: SigSymUse, exps: List[Expr], loc: SourceLocation) extends Expr
 
@@ -194,8 +196,6 @@ object ResolvedAst {
 
     case class RunWith(exp1: Expr, exp2: Expr, loc: SourceLocation) extends Expr
 
-    case class Do(symUse: OpSymUse, exps: List[Expr], loc: SourceLocation) extends Expr
-
     case class InvokeConstructor(clazz: Class[?], exps: List[Expr], loc: SourceLocation) extends Expr
 
     case class InvokeMethod(exp: Expr, methodName: Name.Ident, exps: List[Expr], loc: SourceLocation) extends Expr
@@ -238,9 +238,9 @@ object ResolvedAst {
 
     case class FixpointFilter(pred: Name.Pred, exp: Expr, loc: SourceLocation) extends Expr
 
-    case class FixpointInject(exp: Expr, pred: Name.Pred, loc: SourceLocation) extends Expr
+    case class FixpointInject(exp: Expr, pred: Name.Pred, arity: Int, loc: SourceLocation) extends Expr
 
-    case class FixpointProject(pred: Name.Pred, exp1: Expr, exp2: Expr, loc: SourceLocation) extends Expr
+    case class FixpointProject(pred: Name.Pred, arity: Int, exp1: Expr, exp2: Expr, loc: SourceLocation) extends Expr
 
     case class Error(m: CompilationMessage) extends Expr {
       override def loc: SourceLocation = m.loc

@@ -158,6 +158,10 @@ object LambdaLift {
         case None => throw InternalCompilerException(s"unable to find lifted def for local def $sym", loc)
       }
 
+    case SimplifiedAst.Expr.ApplyOp(sym, exps, tpe, purity, loc) =>
+      val es = exps.map(visitExp)
+      LiftedAst.Expr.ApplyOp(sym, es, tpe, purity, loc)
+
     case SimplifiedAst.Expr.IfThenElse(exp1, exp2, exp3, tpe, purity, loc) =>
       val e1 = visitExp(exp1)
       val e2 = visitExp(exp2)
@@ -187,7 +191,7 @@ object LambdaLift {
     case SimplifiedAst.Expr.LocalDef(sym, fparams, exp1, exp2, _, _, loc) =>
       val freshDefnSym = Symbol.freshDefnSym(sym0)
       val updatedLiftedLocalDefs = liftedLocalDefs + (sym -> freshDefnSym)
-      // It is **very import** we add the mapping `sym -> freshDefnSym` to liftedLocalDefs
+      // It is **very important** we add the mapping `sym -> freshDefnSym` to liftedLocalDefs
       // before visiting the body since exp1 may contain recursive calls to `sym`
       // so they need to be substituted for `freshDefnSym` in `exp1` which
       // `visitExp` handles for us.
@@ -222,10 +226,6 @@ object LambdaLift {
           LiftedAst.HandlerRule(sym, fps, b)
       }
       LiftedAst.Expr.RunWith(e, effUse, rs, tpe, purity, loc)
-
-    case SimplifiedAst.Expr.Do(op, exps, tpe, purity, loc) =>
-      val es = exps.map(visitExp)
-      LiftedAst.Expr.Do(op, es, tpe, purity, loc)
 
     case SimplifiedAst.Expr.NewObject(name, clazz, tpe, purity, methods0, loc) =>
       val methods = methods0.map(visitJvmMethod)

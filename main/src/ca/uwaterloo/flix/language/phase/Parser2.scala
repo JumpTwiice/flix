@@ -1616,9 +1616,11 @@ object Parser2 {
         case TokenKind.KeywordUse => useExpr()
         case TokenKind.LiteralString
              | TokenKind.LiteralChar
+             | TokenKind.LiteralFloat
              | TokenKind.LiteralFloat32
              | TokenKind.LiteralFloat64
              | TokenKind.LiteralBigDecimal
+             | TokenKind.LiteralInt
              | TokenKind.LiteralInt8
              | TokenKind.LiteralInt16
              | TokenKind.LiteralInt32
@@ -2901,9 +2903,9 @@ object Parser2 {
         expression()
       }
       expect(TokenKind.KeywordInto)
-      nameUnqualified(NAME_PREDICATE)
+      predicateAndArity()
       while (eat(TokenKind.Comma) && !eof()) {
-        nameUnqualified(NAME_PREDICATE)
+        predicateAndArity()
       }
       close(mark, TreeKind.Expr.FixpointInject)
     }
@@ -2968,6 +2970,19 @@ object Parser2 {
       close(mark, TreeKind.Expr.FixpointWhere)
     }
 
+    private def predicateAndArity()(implicit s: State): Mark.Closed = {
+      implicit val sctx: SyntacticContext = SyntacticContext.Expr.OtherExpr
+      val mark = open()
+      nameUnqualified(NAME_PREDICATE)
+
+      val hint = "provide a predicate arity such as: Pred/1"
+      // check for shape "/2"
+      expect(TokenKind.Slash, hint = Some(hint))
+      expect(TokenKind.LiteralInt, hint = Some(hint))
+
+      close(mark, TreeKind.PredicateAndArity)
+    }
+
     private def intrinsicExpr()(implicit s: State): Mark.Closed = {
       val mark = open()
       advance()
@@ -3019,9 +3034,11 @@ object Parser2 {
              | TokenKind.KeywordQuery => variablePat()
         case TokenKind.LiteralString
              | TokenKind.LiteralChar
+             | TokenKind.LiteralFloat
              | TokenKind.LiteralFloat32
              | TokenKind.LiteralFloat64
              | TokenKind.LiteralBigDecimal
+             | TokenKind.LiteralInt
              | TokenKind.LiteralInt8
              | TokenKind.LiteralInt16
              | TokenKind.LiteralInt32
@@ -3743,15 +3760,5 @@ object Parser2 {
       )
       close(mark, kind)
     }
-  }
-
-  /** Returns a textual representation of a [[SyntaxTree.Tree]] meant for debugging. */
-  private def syntaxTreeToDebugString(tree: SyntaxTree.Tree, nesting: Int = 1): String = {
-    s"${tree.kind}${
-      tree.children.map {
-        case token@Token(_, _, _, _, _, _) => s"\n${"  " * nesting}'${token.text}'"
-        case tree@SyntaxTree.Tree(_, _, _) => s"\n${"  " * nesting}${syntaxTreeToDebugString(tree, nesting + 1)}"
-      }.mkString("")
-    }"
   }
 }

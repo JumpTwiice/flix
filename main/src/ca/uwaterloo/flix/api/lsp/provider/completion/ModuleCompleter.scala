@@ -32,12 +32,14 @@ object ModuleCompleter {
     if (qn.namespace.nonEmpty)
       root.modules.keys.collect {
         case module if module.ns.nonEmpty && matchesModule(module, qn, qualified = true) =>
-          ModuleCompletion(module, range, ap, qualified = true, inScope = true)
+          ModuleCompletion(module, range, Priority.High(0), ap, qualified = true, inScope = true)
       }
     else
       root.modules.keys.collect({
         case module if module.ns.nonEmpty && matchesModule(module, qn, qualified = false) =>
-          ModuleCompletion(module, range, ap, qualified = false, inScope = inScope(module, scp))
+          val s = inScope(module, scp)
+          val priority = if (s) Priority.High(0) else Priority.Lower(0)
+          ModuleCompletion(module, range, priority, ap, qualified = false, inScope = s)
       })
   }
 
@@ -54,7 +56,7 @@ object ModuleCompleter {
       case Resolution.Declaration(Trait(_, _, _, thatName, _, _, _, _, _, _)) => thatName.toString == thisName
       case Resolution.Declaration(Enum(_, _, _, thatName, _, _, _, _)) => thatName.toString == thisName
       case Resolution.Declaration(Struct(_, _, _, thatName, _, _, _)) => thatName.toString == thisName
-      case Resolution.Declaration(Effect(_, _, _, thatName, _, _)) => thatName.toString == thisName
+      case Resolution.Declaration(Effect(_, _, _, thatName, _, _, _)) => thatName.toString == thisName
       case _ => false
     })
     val isRoot = module.ns.length <= 1
