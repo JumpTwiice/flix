@@ -19,12 +19,12 @@
 mod Fixpoint.Phase.Stratifier {
     use Fixpoint.Ast.Datalog.BodyPredicate.BodyAtom
     use Fixpoint.Ast.Datalog.Constraint.Constraint
-    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Model, Join, Provenance}
-    use Fixpoint.Ast.Datalog.{Datalog, Constraint, HeadPredicate, BodyPredicate, Polarity, Fixity}
+    use Fixpoint.Ast.Datalog.Datalog.{Datalog, Join, Model, Provenance}
     use Fixpoint.Ast.Datalog.HeadPredicate.HeadAtom
+    use Fixpoint.Ast.Datalog.{BodyPredicate, Constraint, Datalog, Fixity, HeadPredicate, Polarity}
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.Util.getOrCrash
-    use Fixpoint.PrecedenceGraph.{MutGraph, getPseudoSCCs}
+    use Fixpoint.PrecedenceGraph.{getPseudoStrata, MutGraph, PseudoStratum, Vertex}
 
     ///
     /// Array allowing lookup of the id-part of `PredSym` to name-part of `PredSym`.
@@ -32,71 +32,70 @@ mod Fixpoint.Phase.Stratifier {
     type alias PredIdToName[r: Region] = Array[String, r]
 
     ///
-    /// Computes the stratification of `d`. The result is a map from `PredSym`
-    /// their strata.
+    /// Computes the stratification of `d`. 
+    ///
+    /// Returns a map from `PredSym` to their position within their pseudostrata:
+    /// `predSym -> (pseudoStratumIndex, stratumIndexInPseudoStratum)`
+    ///
+    /// A pseudostratum is a group of mutually independent, consecutive strata. For example,
+    /// `predSym -> (2, 1)` means `predSym` belongs to stratum 1 within pseudostrata 2.
     ///
     @Internal
     pub def stratify(d: Datalog): Map[PredSym, (Int32, Int32)] = region rc {
-        let graph = MutGraph.empty(rc);
-        mkDepGraphInternal(graph, d);
-        let scc = getPseudoSCCs(graph);
-        let numberOfPredSyms = MutGraph.getSize(graph);
+        let depGraph = MutGraph.empty(rc);
+        addDepEdges(depGraph, d);
+        mkStratificationMap(rc, d, depGraph)
+    }
+
+    ///
+    /// Given `d` with dependency graph `graph`, constructs a map from `PredSym`s in `d`
+    /// to their stratum index within their pseudostrata.
+    ///
+    def mkStratificationMap(rc: Region[r], d: Datalog, graph: MutGraph[r]): Map[PredSym, (Int32, Int32)] \ r =
+        let pseudoStrata = getPseudoStrata(graph);
+        let numberOfPredSyms = MutGraph.numberOfVertices(graph);
         let predSyms = Array.empty(rc, numberOfPredSyms);
-        collectPredSym(predSyms, d);
+        addPredSymsFrom(predSyms, d);
         let result = MutMap.empty(rc);
-        scc |> List.forEachWithIndex(pseudoStrat -> list ->
-            list |> List.forEachWithIndex(strat -> set -> 
-                set |> Set.forEach(x -> {
+        pseudoStrata |> List.forEachWithIndex(pseudoStratum -> list ->
+            list |> List.forEachWithIndex(stratum -> set -> 
+                foreach (x <- set) {
                     let predSym = PredSym.PredSym(Array.get(x, predSyms), Int32.toInt64(x));
-                    MutMap.put(predSym, (pseudoStrat, strat), result)
-                })
+                    MutMap.put(predSym, (pseudoStratum, stratum), result)
+                }
             )
         );
         MutMap.toMap(result)
-    }
-
-    pub def main199(): Unit \ IO = region rc {
-        let g = MutGraph.empty(rc);
-        MutGraph.addEdge(0, 7, g);
-        MutGraph.addEdge(1, 3, g);
-        MutGraph.addEdge(2, 3, g);
-        MutGraph.addEdge(3, 4, g);
-        MutGraph.addEdge(4, 3, g);
-        MutGraph.addEdge(3, 6, g);
-        MutGraph.addEdge(5, 6, g);
-        MutGraph.addEdge(5, 7, g);
-        MutGraph.addEdge(6, 11, g);
-        MutGraph.addEdge(10, 11, g);
-        getPseudoSCCs(g) |> println
-    }
 
     ///
-    /// Insert edges into `graph` for the dependencies in the Datalog program `d`.
-    /// `A(x) :- B(x), A(x), -C(x).` inserts the edge `B -> A` and `C -> A` in `graph`.
+    /// Insert edges into `graph` for the dependencies in the Datalog program `d`. 
+    /// `A(x) :- B(x), A(x), -C(x).` inserts the edges `B -> A` and `C -> A` in `graph`.
     ///
-    def mkDepGraphInternal(graph: MutGraph[r], d: Datalog): Unit \ r = match d {
+    def addDepEdges(graph: MutGraph[r], d: Datalog): Unit \ r = match d {
         case Datalog(_, rules) => Vector.forEach(precedenceHelper(graph), rules)
         case Model(_) => ()
-        case Join(d1, d2) => mkDepGraphInternal(graph, d1); mkDepGraphInternal(graph, d2)
+        case Join(d1, d2) => 
+            addDepEdges(graph, d1); 
+            addDepEdges(graph, d2)
         case Provenance(_, _) => ()
     }
 
     ///
     /// Inserts edges into `graph` for the dependencies in the constraints `cnst`.
     ///
-    /// See `mkDepGraphInternal`.
+    /// See `addDepEdges`.
     ///
     def precedenceHelper(graph: MutGraph[r], cnst: Constraint): Unit \ r = match cnst {
-        case Constraint(head, body) => Vector.forEach(mkDepEdge(graph, head), body)
+        case Constraint(head, body) => Vector.forEach(addDepEdge(graph, head), body)
     }
 
     ///
-    /// Inserts edges into `graph` for the found dependency between `dst`
-    /// and `src`. No edge is inserted if `dst == src`.
+    /// Inserts edges into `graph` for the found dependency between `dst` and `src`. No
+    /// edge is inserted if `dst == src`.
     ///
-    /// See `mkDepGraphInternal`.
+    /// See `addDepEdges`.
     ///
-    def mkDepEdge(graph: MutGraph[r], dst: HeadPredicate, src: BodyPredicate): Unit \ r = match (dst, src) {
+    def addDepEdge(graph: MutGraph[r], dst: HeadPredicate, src: BodyPredicate): Unit \ r = match (dst, src) {
         case (HeadAtom(PredSym.PredSym(_, dstId), _, _), BodyAtom(PredSym.PredSym(_, srcId), _, _, _, _)) => {
             if(dstId != srcId) {
                 MutGraph.addEdge(toInt32(srcId), toInt32(dstId), graph)
@@ -109,20 +108,20 @@ mod Fixpoint.Phase.Stratifier {
     }
 
     ///
-    /// Collects the names of the `PredSym`s of `d`. A `PredSym` `(name, id)`
-    /// in `d` will ensure that `predMap[id] == name`.
+    /// Collects the names of the `PredSym`s of `d`. A `PredSym` `(name, id)` in `d` will
+    /// ensure that `predMap[id] == name`.
     ///
-    def collectPredSym(predMap: PredIdToName[r], d: Datalog): Unit \ r = match d {
+    def addPredSymsFrom(predMap: PredIdToName[r], d: Datalog): Unit \ r = match d {
         case Datalog(_, rules) => Vector.forEach(predSymHelper(predMap), rules)
         case Model(_) => ()
-        case Join(d1, d2) => collectPredSym(predMap, d1); collectPredSym(predMap, d2)
+        case Join(d1, d2) => addPredSymsFrom(predMap, d1); addPredSymsFrom(predMap, d2)
         case Provenance(_, _) => ()
     }
 
     ///
     /// Collects the names of the `PredSym`s of `cnst`.
     /// 
-    /// See `collectPredSym`.
+    /// See `addPredSymsFrom`.
     ///
     def predSymHelper(predMap: PredIdToName[r], cnst: Constraint): Unit \ r = match cnst {
         case Constraint(HeadPredicate.HeadAtom(PredSym.PredSym(name, id), _, _), body) =>
@@ -133,7 +132,7 @@ mod Fixpoint.Phase.Stratifier {
     ///
     /// Collects the names of the `PredSym`s of `body`.
     /// 
-    /// See `collectPredSym`.
+    /// See `addPredSymsFrom`.
     ///
     def collectEdge(predMap: PredIdToName[r], body: BodyPredicate): Unit \ r = match body {
         case (BodyAtom(PredSym.PredSym(name, id), _, _, _, _)) => {

@@ -17,13 +17,15 @@
  */
 
 mod Fixpoint.Debugging {
-
     use Fixpoint.Ast.Datalog.Datalog
     use Fixpoint.Ast.ExecutableRam
     use Fixpoint.Ast.Ram
     use Fixpoint.Ast.Shared.PredSym
     use Fixpoint.BoxingType
 
+    ///
+    /// Write `s` to standard file. Overwrite if `overwrite` is true, otherwise append.
+    ///
     def flush(s: String, overwrite: Bool): Unit \ IO = 
         if (Fixpoint.Options.enableDebugToFile()) {
             let res = 

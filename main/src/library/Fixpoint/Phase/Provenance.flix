@@ -22,13 +22,20 @@
     use Fixpoint.Counter
 
     ///
-    /// Augments `program` with `ProvMax` 
+    /// If `withProv` is `False`: `program` is returned unchanged.
+    ///
+    /// If `withProv` is `True`: Augment `program` to maintain proof depth of atoms and
+    /// rule used to generate them. Further add extend facts to contain a depth and rule.
     ///
     @Internal
     pub def augmentProgram(withProv: Bool, program: RamProgram): RamProgram = 
         if (not withProv) program
         else augmentProgramInternal(program)
     
+    ///
+    /// Augment `program` to maintain proof depth of atoms and rule used to generate them.
+    /// Further add extend facts to contain a depth and rule.
+    ///
     def augmentProgramInternal(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, predicates, indexInfo) =>
             let augmentedFacts = facts |> 

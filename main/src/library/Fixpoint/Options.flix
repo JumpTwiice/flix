@@ -67,8 +67,7 @@ mod Fixpoint.Options {
     pub def parLevel(): Int32 = 2
 
     ///
-    /// Returns the seed used in the random number generator to generate
-    /// the representative input used by the profiler.
+    /// Returns the minimum number of facts the profiler will sample.
     ///
     @Internal
     pub def profilerFactLowerBound(): Int32 = 10

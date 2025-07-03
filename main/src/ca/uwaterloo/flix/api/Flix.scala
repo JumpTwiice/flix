@@ -270,9 +270,8 @@ class Flix {
     "Fixpoint/PredSymsOf.flix" -> LocalResource.get("/src/library/Fixpoint/PredSymsOf.flix"),
     "Fixpoint/Provenance.flix" -> LocalResource.get("/src/library/Fixpoint/Provenance.flix"),
     "Fixpoint/ReadWriteLock.flix" -> LocalResource.get("/src/library/Fixpoint/ReadWriteLock.flix"),
-    "Fixpoint/SolverApi.flix" -> LocalResource.get("/src/library/Fixpoint/Solver.flix"),
+    "Fixpoint/Solver.flix" -> LocalResource.get("/src/library/Fixpoint/Solver.flix"),
     "Fixpoint/SubstitutePredSym.flix" -> LocalResource.get("/src/library/Fixpoint/SubstitutePredSym.flix"),
-    "Fixpoint/Toggle.flix" -> LocalResource.get("/src/library/Fixpoint/Toggle.flix"),
     "Fixpoint/UniqueInts.flix" -> LocalResource.get("/src/library/Fixpoint/UniqueInts.flix"),
     "Fixpoint/Util.flix" -> LocalResource.get("/src/library/Fixpoint/Util.flix"),
 

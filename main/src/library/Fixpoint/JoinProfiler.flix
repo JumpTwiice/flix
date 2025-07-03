@@ -20,7 +20,7 @@ mod Fixpoint.JoinProfiler {
     use Fixpoint.Ast.Ram.{RamProgram, RamStmt, RelOp, RelSym, RowVar, Search}
     use Fixpoint.Counter
     use Fixpoint.Util.{getOrCrash, unifyEqualitiesOp}
-    use Fixpoint.SolverApi
+    use Fixpoint.Solver
     use Fixpoint.Util.{collectRowVarRelSymOp}
 
     ///
@@ -59,7 +59,7 @@ mod Fixpoint.JoinProfiler {
         let (instrumentedProgram, attributeMap, rowVarToPos) = instrumentProgram(rc, program); 
         let vec = instrumentedProgram |>
             Fixpoint.Debugging.notifyPreLowering("Join Profiler") |>
-            SolverApi.runJoinProfiler;
+            Solver.runJoinProfiler;
         let joinToSizeDup = Map.map(i -> Vector.get(i, vec), rowVarToPos);
         let sizePerIter = joinToSizeDup |> 
             Map.foldLeftWithKey(acc -> k1 -> v1 -> {

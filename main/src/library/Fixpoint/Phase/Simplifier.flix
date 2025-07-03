@@ -17,76 +17,80 @@
  */
 
 mod Fixpoint.Phase.Simplifier {
-    use Fixpoint.Ast.Ram.{RamStmt, RelOp, RelSym, RamTerm, BoolExp, RowVar, Facts, RamProgram, Predicates}
-    use Fixpoint.Ast.Ram.RamTerm.{RowLoad, Lit, Meet}
+    use Fixpoint.Ast.Ram.{BoolExp, Facts, Predicates, RamProgram, RamStmt, RelOp, RelSym, RowVar}
+    use Fixpoint.Ast.Ram.RamTerm.RowLoad
     use Fixpoint.Predicate.{getRelSymAsType, PredType}
 
     ///
     /// Optimize and simplify `stmt` by deleting redundant code and reordering code.
-    /// Examples of redundancy include `x[i] == x[i]` or `x ⊓ y ≤ x`.
+    /// Examples of redundancy include `x[i] == x[i]`.
     /// Reordering means `(0, 1) ∉ Path ∧ x[1] = y[0]` would be swapped `x[1] = y[0] ∧ (0, 1) ∉ Path`.
     /// A simple static analysis also reveals that the following join-loop is redundant
     /// in stratum `j` if `C` is computed in stratum `i` and `i < j`:
-    ///     search B$1 ∈ B do
-    ///         search C$2 ∈ ΔC do
-    ///             if (B$1[0] == C$2[0] ∧ (B$1[0]) ∉ A ∧ (B$1[0]) ∉ R) then
-    ///                 project (B$1[0]) into ΔR'
-    ///             end
+    /// ```
+    /// search x ∈ B do
+    ///     search y ∈ ΔC do
+    ///         if (x[0] == y[0] ∧ (x[0]) ∉ A ∧ (x[0]) ∉ R) then
+    ///             project (x[0]) into ΔR'
     ///         end
     ///     end
+    /// end
+    /// ```
+    ///
+    /// The returned RAM program is always the same size or smaller.
     ///
     @Internal
-    pub def simplifyProgram(program: RamProgram): RamProgram = region rc {match program {
+    pub def simplifyProgram(program: RamProgram): RamProgram = match program {
         case RamProgram.Program(stmt, facts, predicates, index) =>
+            // Compute the a set of all relations which are initialized with facts, i.e. have some EDB facts.
             let nonEmpty = facts |>
                 Map.filter(Vector.nonEmpty) |>
                 Map.foldRightWithKey(k -> _ -> Set.insert(k), Set#{}) |>
                 Set.map(rel -> getRelSymAsType(rel, PredType.Full, predicates));
-            let _ = Array.empty(rc, 1);
             RamProgram.Program(simplifyStmt(stmt, nonEmpty, predicates), facts, predicates, index)
-    }}
+    }
+
+    ///
+    /// Simplifies `stmt` by removing redundant code.
+    ///
+    /// `nonEmpty` is the set of `RelSym` whose relation is non-empty.
+    ///
+    /// `Predicates` is a structure for interacting with predicate symbols.
+    ///
     @Internal
     pub def simplifyStmt(stmt: RamStmt, nonEmpty: Set[RelSym], predicates: Predicates): RamStmt =
         Option.getWithDefault(RamStmt.Seq(Vector#{}), simplifyHelper(nonEmpty, predicates, false, stmt))
 
+    ///
+    /// Helper function for `simplifyStmt`.
+    ///
+    /// `nonEmpty` is the set of `RelSym` whose relation is non-empty.
+    ///
+    /// `Predicates` is a structure for interacting with predicate symbols.
+    ///
+    /// `inUntil` is true iff `stmt` is in the body of an `Until` stmt.
+    ///
+    /// Returns `None` when `stmt` is discovered to be redundant.
+    ///
+    /// Returns `Some(v)` where `v` semantically equivalent to `stmt` if we cannot
+    /// conclude that `stmt` is redundant.
+    ///
+    /// The redundant examples handled directly by `simplifyHelper` is restricted to `Until(test, body)` where
+    /// `body` can be simplified to only contain `Merge`, `Swap` and `Purge`.
+    ///
+    /// A simplification of an `Insert` can also lead to `None`, though this is handled by `simplifyOp`.
+    ///
     def simplifyHelper(nonEmpty: Set[RelSym], predicates: Predicates, inUntil: Bool, stmt: RamStmt): Option[RamStmt] = match stmt {
         case RamStmt.Insert(op) =>
-            forM (
-                newOp <- simplifyOp(nonEmpty, predicates, inUntil, Set#{}, op)
-            ) yield {
-                match newOp {
-                    //
-                    // DANGER! WILL ROBINSON! The following code is incorrect when a relation is being merged into a lattice.
-                    //
-                    // See #4719.
-                    //
-                    // // Rewrite join loops that copy one relation into another into a `merge` statement.
-                    // // search b ∈ B do
-                    // //   project (b[0], b[1]) into A
-                    // // end
-                    // // ==>
-                    // // merge B into A
-                    // // If A and B have the same arity.
-                    // case RelOp.Search(varB, relB, RelOp.Project(tuple, relA)) =>
-                    //     use Fixpoint.Ram.arityOf;
-                    //     let isCopy =
-                    //         Vector.map(t -> match t {
-                    //             case RamTerm.RowLoad(var, i) => if (varB == var) i else -1
-                    //             case _ => -1
-                    //         }, tuple) == Vector.range(0, arityOf(relB));
-                    //     if (isCopy)
-                    //         RamStmt.MergeInto(relB, relA)
-                    //     else
-                    //         RamStmt.Insert(newOp)
-                    case _ => RamStmt.Insert(newOp)
-                }
-            }
+            simplifyOp(nonEmpty, predicates, inUntil, Set#{}, op) |>
+            Option.map(RamStmt.Insert)
         case RamStmt.MergeInto(_, _) => Some(stmt)
         case RamStmt.Swap(_, _) => Some(stmt)
         case RamStmt.Purge(_) => Some(stmt)
         case RamStmt.Seq(xs) =>
             Some(RamStmt.Seq(Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)))
-        case RamStmt.Par(xs) => Some(RamStmt.Par(Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)))
+        case RamStmt.Par(xs) => 
+            Some(RamStmt.Par(Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)))
         case RamStmt.Until(test, body) =>
             match simplifyHelper(nonEmpty, predicates, true, body) {
                 case None => None
@@ -101,70 +105,80 @@ mod Fixpoint.Phase.Simplifier {
         case RamStmt.Comment(_) => Some(stmt)
     }
 
+    ///
+    /// Simplify `op` by removing redundant code. See `simplifyStmt`.
+    ///
+    /// `inUntil` is true if `op` appears in an `Until` statement.
+    ///
+    /// `seenPreds` is the set of `RelSym` seen so far.
+    ///
+    /// Returns `None` when children are simplified to `None` or for certain `Project`
+    /// statements not in `Until` bodies depending on themselves. Consider the example
+    /// ```
+    /// search x ∈ B do
+    ///     search y ∈ A do
+    ///         project (x[0], y[0]) into ΔA'
+    ///     end
+    /// end;
+    /// Merge(ΔA', A);
+    /// Swap(ΔA', ΔA);
+    /// Until(...) {...}
+    /// ```
+    ///
+    /// Assuming `A` is empty/has no EDB facts then the naive loop is redundant.
+    /// This optimization is sound as `A` is only written to in merge statements and they always occur
+    /// after the naive `Project` statements generated by the rules with `A` as head. We cannot remove any part of
+    /// the semi-naive `Until`-loop, as other rules could populate `A`/`ΔA`.
+    ///
+    /// Returns `Some(v)` otherwise, where `v` is a simplifcation of `op`.
+    ///
     def simplifyOp(nonEmpty: Set[RelSym], predicates: Predicates, inUntil: Bool, seenPreds: Set[RelSym], op: RelOp): Option[RelOp] = 
         let recurseNewRel = rel -> simplifyOp(nonEmpty, predicates, inUntil, Set.insert(rel, seenPreds));
         let recurse = simplifyOp(nonEmpty, predicates, inUntil, seenPreds);
         match op {
-        case RelOp.Search(rowVar, ramSym, body) =>
-            Option.map(newBody -> RelOp.Search(rowVar, ramSym, newBody), recurseNewRel(ramSym, body))
-        case RelOp.Query(rowVar, ramSym, qry, _, body) =>
-            let f = nb -> match ramSym {
-                case _ => Some(RelOp.Query(rowVar, ramSym, qry, -1, nb))
-            };
-            forM (
-                newBody <- recurseNewRel(ramSym, body);
-                res <- f(newBody)
-            ) yield res
-        // case RelOp.Query(rowVar, ramSym, qry, body) =>
-        //     let f = nb -> match ramSym {
-        //         // case RelSym.Delta(_, _, _) =>
-        //         //     if (Set.memberOf(ramSym, stratum))
-        //         //         Some(RelOp.Query(rowVar, ramSym, qry, nb))
-        //         //     else
-        //         //         None
-        //         case _ => Some(RelOp.Query(rowVar, ramSym, qry, nb))
-        //     };
-        //     forM (
-        //         newBody <- simplifyOp(stratum, body);
-        //         res <- f(newBody)
-        //     ) yield res
-        case RelOp.Functional(rowVar, f, terms, body, arity) =>
-            forM(
-                newBody <- recurse(body)
-            ) yield RelOp.Functional(rowVar, f, terms, newBody, arity)
-        case RelOp.Project(_, rel, _) =>
-            // If we are not in an until and we insert in the new relation for `rel`,
-            // we depend on `rel`, and `rel` is empty beforehand the code is dead.
-            let fulRel = getRelSymAsType(rel, PredType.Full, predicates);
-            if((not inUntil) and Set.memberOf(fulRel, seenPreds) and (not Set.memberOf(fulRel, nonEmpty))) {
-                None
-            } else {
-                Some(op)
-            }
-        case RelOp.If(test, then) =>
-            let (memberOf, rest) =
-                // Delete checks of the form `x[i] == x[i]`.
-                Vector.filter(e -> match e {
-                    case BoolExp.Eq(RowLoad(lhs1, lhs2, _), RowLoad(rhs1, rhs2, _)) => (lhs1, lhs2) != (rhs1, rhs2)
-                    case _ => true
-                }, test) |>
-                // Partition into membership tests and rest.
-                Vector.partition(e -> match e {
-                    case BoolExp.NotMemberOf(_, _) => true
-                    case _ => false
-                });
-            let newTest = Vector.append(rest, memberOf);
-            // Simplify `if () then body` to `body`.
-            match recurse(then) {
-                case None => None
-                case Some(newThen) =>  
-                if (Vector.isEmpty(newTest))
-                    Some(newThen)
-                else
-                    Some(RelOp.If(newTest, newThen))
-            }
+            case RelOp.Search(rowVar, relSym, body) =>
+                recurseNewRel(relSym, body) |> Option.map(newBody -> RelOp.Search(rowVar, relSym, newBody))
+            case RelOp.Query(rowVar, relSym, qry, _, body) =>
+                recurseNewRel(relSym, body) |> Option.map(RelOp.Query(rowVar, relSym, qry, -1))
+            case RelOp.Functional(rowVar, f, terms, body, arity) =>
+                recurse(body) |> Option.map(newBody -> RelOp.Functional(rowVar, f, terms, newBody, arity))
+            case RelOp.Project(_, rel, _) =>
+                // If we are not in an until and we insert in the new relation for `rel`,
+                // we depend on `rel`, and `rel` is empty beforehand the code is dead.
+                // See the example above in the doc comment for what this removes.
+                let fullRel = getRelSymAsType(rel, PredType.Full, predicates);
+                let dependOnRel = Set.memberOf(fullRel, seenPreds);
+                let relIsEmpty = (not Set.memberOf(fullRel, nonEmpty));
+                let isDead = (not inUntil) and dependOnRel and relIsEmpty;
+                if (isDead) None else Some(op)
+            case RelOp.If(test, then) =>
+                let (memberOf, rest) =
+                    // Delete checks of the form `x[i] == x[i]`.
+                    Vector.filter(e -> match e {
+                        case BoolExp.Eq(RowLoad(lhs1, lhs2, _), RowLoad(rhs1, rhs2, _)) => (lhs1, lhs2) != (rhs1, rhs2)
+                        case _ => true
+                    }, test) |>
+                    // Partition into membership tests and rest.
+                    Vector.partition(e -> match e {
+                        case BoolExp.NotMemberOf(_, _) => true
+                        case _ => false
+                    });
+                let newTest = Vector.append(rest, memberOf);
+                // Simplify `if () then body` to `body`.
+                match recurse(then) {
+                    case None => None
+                    case Some(newThen) =>  
+                        if (Vector.isEmpty(newTest))
+                            Some(newThen)
+                        else
+                            Some(RelOp.If(newTest, newThen))
+                }
     }
 
+    ///
+    /// Returns true if `r` is a `Merge`, `Swap`, or `Purge` statement or contains any one
+    /// of them.
+    ///
     def isOnlyMergeSwapPurge(r: RamStmt): Bool = match r {
         case RamStmt.Insert(_) => false
         case RamStmt.MergeInto(_, _) => true
