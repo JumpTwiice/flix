@@ -103,14 +103,9 @@ mod Fixpoint.Util {
     }
 
     ///
-    /// Collects equality information in `op` and save it in `equalitySets` and `constEqualities`.
-    /// Equalities between 2 `RowLoad`s are added to `equalitySets` and equalities between `RowLoad`
-    /// and `Lit` are added to `constEqualities`.
+    /// Collects equality information in `op`.
     ///
-    /// In `equalitySets` we unify `(rv1, i1)` with `(rv2, i2)` if they occur together
-    /// in an equaltiy statement.
-    ///
-    /// In `constEqualities` we save a list of which literals a `(rv, i)` were equal to.
+    /// See `unifyEqualitiesStmt`.
     ///
     @Internal
     pub def unifyEqualitiesOp(

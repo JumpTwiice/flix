@@ -1,0 +1,340 @@
+********************************************************************************
+** Datalog Input
+********************************************************************************
+
+    Printing facts disabled.
+    Printing facts disabled 
+    Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>().
+    Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)).
+    Node%2(VarSym(x)) :- fix Dist%1(VarSym(x); _).
+    $Result%3(VarSym(x)) :- Node%2(VarSym(x)).
+
+********************************************************************************
+** (Compiler) Relation Algebra Machine AST
+********************************************************************************
+
+    /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+    search x0 ∈ Dist%1 do
+        search x1 ∈ Edge%0 do
+            if(x0[0] = x0[0] ∧ (x0[1]) ≠ ⊥ ∧ x1[0] = x0[0] ∧ x1[1] = x1[1] ∧ <clo>(x0[1])) then
+                project (x1[1], <clo>(x0[1])) into Dist%9
+            end
+        end
+    end|
+    /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */|
+    if() then
+        project (BoxedInt32(1), BoxedObject(Down(0), Obj -> Obj)) into Dist%9
+    end;
+    Merge Dist%9 into Dist%1;
+    Swap Dist%9 and Dist%5;
+    Purge Dist%9;
+    until(Dist%5 = ∅) do
+        /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+        search x5 ∈ Dist%1 do
+            search x6 ∈ Edge%0 do
+                if((x6[1], <clo>(x5[1])) ∉ Dist%1 ∧ x5[0] = x5[0] ∧ (x5[1]) ≠ ⊥ ∧ x6[0] = x5[0] ∧ x6[1] = x6[1] ∧ <clo>(x5[1])) then
+                    project (x6[1], <clo>(x5[1])) into Dist%9
+                end
+            end
+        end|
+        /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */;
+        Merge Dist%9 into Dist%1;
+        Swap Dist%9 and Dist%5;
+        Purge Dist%9
+    end;
+    /* Node%2(VarSym(x)) :- fix Dist%1(VarSym(x); _). */|
+    search x8 ∈ Dist%1 do
+        if(x8[0] = x8[0] ∧ (x8[1]) ≠ ⊥) then
+            project (x8[0]) into Node%10
+        end
+    end;
+    Merge Node%10 into Node%2;
+    Swap Node%10 and Node%6;
+    Purge Node%10;
+    until(Node%6 = ∅) do
+        /* Node%2(VarSym(x)) :- fix Dist%1(VarSym(x); _). */;
+        Merge Node%10 into Node%2;
+        Swap Node%10 and Node%6;
+        Purge Node%10
+    end;
+    /* $Result%3(VarSym(x)) :- Node%2(VarSym(x)). */|
+    search x9 ∈ Node%2 do
+        if(x9[0] = x9[0]) then
+            project (x9[0]) into $Result%11
+        end
+    end;
+    Merge $Result%11 into $Result%3;
+    Swap $Result%11 and $Result%7;
+    Purge $Result%11;
+    until($Result%7 = ∅) do
+        /* $Result%3(VarSym(x)) :- Node%2(VarSym(x)). */;
+        Merge $Result%11 into $Result%3;
+        Swap $Result%11 and $Result%7;
+        Purge $Result%11
+    end
+
+********************************************************************************
+** (Simplifier) Relation Algebra Machine AST
+********************************************************************************
+
+    /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+    /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */|
+    project (BoxedInt32(1), BoxedObject(Down(0), Obj -> Obj)) into Dist%9;
+    Merge Dist%9 into Dist%1;
+    Swap Dist%9 and Dist%5;
+    Purge Dist%9;
+    until(Dist%5 = ∅) do
+        /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+        search x5 ∈ Dist%1 do
+            search x6 ∈ Edge%0 do
+                if((x5[1]) ≠ ⊥ ∧ x6[0] = x5[0] ∧ <clo>(x5[1]) ∧ (x6[1], <clo>(x5[1])) ∉ Dist%1) then
+                    project (x6[1], <clo>(x5[1])) into Dist%9
+                end
+            end
+        end|
+        /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */;
+        Merge Dist%9 into Dist%1;
+        Swap Dist%9 and Dist%5;
+        Purge Dist%9
+    end;
+    /* Node%2(VarSym(x)) :- fix Dist%1(VarSym(x); _). */|
+    search x8 ∈ Dist%1 do
+        if((x8[1]) ≠ ⊥) then
+            project (x8[0]) into Node%10
+        end
+    end;
+    Merge Node%10 into Node%2;
+    Swap Node%10 and Node%6;
+    Purge Node%10;
+    /* $Result%3(VarSym(x)) :- Node%2(VarSym(x)). */|
+    search x9 ∈ Node%2 do
+        project (x9[0]) into $Result%11
+    end;
+    Merge $Result%11 into $Result%3;
+    Swap $Result%11 and $Result%7;
+    Purge $Result%11
+
+********************************************************************************
+** (Join Optimizer) Relation Algebra Machine AST
+********************************************************************************
+
+    /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+    /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */|
+    project (BoxedInt32(1), BoxedObject(Down(0), Obj -> Obj)) into Dist%9;
+    Merge Dist%9 into Dist%1;
+    Swap Dist%9 and Dist%5;
+    Purge Dist%9;
+    until(Dist%5 = ∅) do
+        /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+        search x5 ∈ Dist%1 do
+            search x6 ∈ Edge%0 do
+                if((x5[1]) ≠ ⊥ ∧ x6[0] = x5[0] ∧ <clo>(x5[1]) ∧ (x6[1], <clo>(x5[1])) ∉ Dist%1) then
+                    project (x6[1], <clo>(x5[1])) into Dist%9
+                end
+            end
+        end|
+        /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */;
+        Merge Dist%9 into Dist%1;
+        Swap Dist%9 and Dist%5;
+        Purge Dist%9
+    end;
+    /* Node%2(VarSym(x)) :- fix Dist%1(VarSym(x); _). */|
+    search x8 ∈ Dist%1 do
+        if((x8[1]) ≠ ⊥) then
+            project (x8[0]) into Node%10
+        end
+    end;
+    Merge Node%10 into Node%2;
+    Swap Node%10 and Node%6;
+    Purge Node%10;
+    /* $Result%3(VarSym(x)) :- Node%2(VarSym(x)). */|
+    search x9 ∈ Node%2 do
+        project (x9[0]) into $Result%11
+    end;
+    Merge $Result%11 into $Result%3;
+    Swap $Result%11 and $Result%7;
+    Purge $Result%11
+
+********************************************************************************
+** (Hoisting) Relation Algebra Machine AST
+********************************************************************************
+
+    /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+    /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */|
+    if() then
+        project (BoxedInt32(1), BoxedObject(Down(0), Obj -> Obj)) into Dist%9
+    end;
+    Merge Dist%9 into Dist%1;
+    Swap Dist%9 and Dist%5;
+    Purge Dist%9;
+    until(Dist%5 = ∅) do
+        /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+        if(not (Dist%1 = ∅) ∧ not (Edge%0 = ∅)) then
+            query {x5 ∈ Dist%1 | (x5[1]) ≠ ⊥ ∧ <clo>(x5[1])} do
+                query {x6 ∈ Edge%0 | x6[0] = x5[0] ∧ (x6[1], <clo>(x5[1])) ∉ Dist%1} do
+                    project (x6[1], <clo>(x5[1])) into Dist%9
+                end
+            end
+        end|
+        /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */;
+        Merge Dist%9 into Dist%1;
+        Swap Dist%9 and Dist%5;
+        Purge Dist%9
+    end;
+    /* Node%2(VarSym(x)) :- fix Dist%1(VarSym(x); _). */|
+    if(not (Dist%1 = ∅)) then
+        query {x8 ∈ Dist%1 | (x8[1]) ≠ ⊥} do
+            project (x8[0]) into Node%10
+        end
+    end;
+    Merge Node%10 into Node%2;
+    Swap Node%10 and Node%6;
+    Purge Node%10;
+    /* $Result%3(VarSym(x)) :- Node%2(VarSym(x)). */|
+    if(not (Node%2 = ∅)) then
+        search x9 ∈ Node%2 do
+            project (x9[0]) into $Result%11
+        end
+    end;
+    Merge $Result%11 into $Result%3;
+    Swap $Result%11 and $Result%7;
+    Purge $Result%11
+
+********************************************************************************
+** (Index Selection) Relation Algebra Machine AST
+********************************************************************************
+
+    /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+    /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */|
+    if() then
+        project (BoxedInt32(1), BoxedObject(Down(0), Obj -> Obj)) into Dist%9
+    end;
+    Merge Dist%9 into Dist%1;
+    Swap Dist%9 and Dist%5;
+    Purge Dist%9;
+    until(Dist%5 = ∅) do
+        /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+        if(not (Dist%1 = ∅) ∧ not (Edge%0 = ∅)) then
+            search x5 ∈ Dist%1 do
+                if((x5[1]) ≠ ⊥ ∧ <clo>(x5[1])) then
+                    query {x6 ∈ Edge%0 | x6[0] = x5[0]} do
+                        if((x6[1], <clo>(x5[1])) ∉ Dist%1) then
+                            project (x6[1], <clo>(x5[1])) into Dist%9
+                        end
+                    end
+                end
+            end
+        end|
+        /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */;
+        Merge Dist%9 into Dist%1;
+        Swap Dist%9 and Dist%5;
+        Purge Dist%9
+    end;
+    /* Node%2(VarSym(x)) :- fix Dist%1(VarSym(x); _). */|
+    if(not (Dist%1 = ∅)) then
+        search x8 ∈ Dist%1 do
+            if((x8[1]) ≠ ⊥) then
+                project (x8[0]) into Node%10
+            end
+        end
+    end;
+    Merge Node%10 into Node%2;
+    Swap Node%10 and Node%6;
+    Purge Node%10;
+    /* $Result%3(VarSym(x)) :- Node%2(VarSym(x)). */|
+    if(not (Node%2 = ∅)) then
+        search x9 ∈ Node%2 do
+            project (x9[0]) into $Result%11
+        end
+    end;
+    Merge $Result%11 into $Result%3;
+    Swap $Result%11 and $Result%7;
+    Purge $Result%11
+
+********************************************************************************
+** Executable Relation Algebra Machine AST
+********************************************************************************
+
+    /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+    /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */|
+    if() then
+        project (1i64, 1i64) into 6
+    end;
+    Merge indexes[6] into indexes[4];
+    Swap indexes[6] and indexes[5];
+    Purge indexes[6];
+    Until(indexes[5] = ∅) do
+        /* Dist%1(VarSym(y); <clo>(VarSym(d))) :- Dist%1(VarSym(x); VarSym(d)), Edge%0(VarSym(x), VarSym(y)), <clo>(VarSym(d)). */|
+        if(not (indexes[4] = ∅) ∧ not (indexes[0] = ∅)) then
+            search x0 ∈ indexes[4] | (0, 1, 0) do
+                if(<clo>(LoadLatVar[0])) then
+                    query {x1 ∈ indexes[0] | } do
+                        if((x1[1], <clo>(LoadLatVar[0])) ∉ indexes[4]) then
+                            project (x1[1], <clo>(LoadLatVar[0])) into 6
+                        end
+                    end
+                end
+            end
+        end|
+        /* Dist%1(BoxedInt32(1); BoxedObject(Down(0), Obj -> Obj)) :- <clo>(). */;
+        Merge indexes[6] into indexes[4];
+        Swap indexes[6] and indexes[5];
+        Purge indexes[6]
+    end;
+    /* Node%2(VarSym(x)) :- fix Dist%1(VarSym(x); _). */|
+    if(not (indexes[4] = ∅)) then
+        search x2 ∈ indexes[4] |  do
+            if() then
+                project (x2[0]) into 11
+            end
+        end
+    end;
+    Merge indexes[11] into indexes[9];
+    Swap indexes[11] and indexes[10];
+    Purge indexes[11];
+    /* $Result%3(VarSym(x)) :- Node%2(VarSym(x)). */|
+    if(not (indexes[9] = ∅)) then
+        search x3 ∈ indexes[9] |  do
+            project (x3[0]) into 3
+        end
+    end;
+    Merge indexes[3] into indexes[1];
+    Swap indexes[3] and indexes[2];
+    Purge indexes[3]
+
+
+********************************************************************************
+** Index Information
+********************************************************************************
+
+    $Result%3: Vector#{Vector#{0}}
+    $Result%7: Vector#{Vector#{0}}
+    $Result%11: Vector#{Vector#{0}}
+    Dist%1: Vector#{Vector#{0}}
+    Dist%5: Vector#{Vector#{0}}
+    Dist%9: Vector#{Vector#{0}}
+    Edge%0: Vector#{Vector#{0, 1}}
+    Edge%4: Vector#{Vector#{0, 1}}
+    Edge%8: Vector#{Vector#{0, 1}}
+    Node%2: Vector#{Vector#{0}}
+    Node%6: Vector#{Vector#{0}}
+    Node%10: Vector#{Vector#{0}}
+
+
+********************************************************************************
+** Index Position in Database
+********************************************************************************
+
+    ($Result%3, 0): 1
+    ($Result%7, 0): 2
+    ($Result%11, 0): 3
+    (Dist%1, 0): 4
+    (Dist%5, 0): 5
+    (Dist%9, 0): 6
+    (Edge%0, 0): 0
+    (Edge%4, 0): 7
+    (Edge%8, 0): 8
+    (Node%2, 0): 9
+    (Node%6, 0): 10
+    (Node%10, 0): 11
+
