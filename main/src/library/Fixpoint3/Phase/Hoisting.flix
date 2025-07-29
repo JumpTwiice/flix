@@ -87,7 +87,6 @@ mod Fixpoint3.Phase.Hoisting {
     use Fixpoint3.Boxed
     use Fixpoint3.Phase.Compiler.functionalRelSym
     use Fixpoint3.Util.getOrCrash
-    use MutDisjointSets.MutDisjointSets
 
     ///
     /// Hoists `program` as described above.
@@ -191,7 +190,6 @@ mod Fixpoint3.Phase.Hoisting {
                 case None => None
                 case Some(v) => Some(RamStmt.Until(test, v))
             }
-        case RamStmt.EstimateJoinSize(_, _, _, _) => Some(stmt)
         case RamStmt.Comment(_) => Some(stmt)
     }
 
@@ -616,7 +614,7 @@ mod Fixpoint3.Phase.Hoisting {
     ///
     /// Returns `true` if `term` is ground with respect to `termMap` and `equalitySets`.
     ///
-    /// A `RowLoad` is ground if it represents `(rv, index)` with respect to `equalitySets`
+    /// A `RowLoad` is ground if its representing `(rv, index)` with respect to `equalitySets`
     /// is in `termMap`.
     ///
     def isTermGround(
@@ -663,7 +661,6 @@ mod Fixpoint3.Phase.Hoisting {
         case RamStmt.Swap(_, _) => ()
         case RamStmt.Purge(_) => ()
         case RamStmt.Comment(_) => ()
-        case RamStmt.EstimateJoinSize(_, _, _, _) => ()
     }
 
     ///
