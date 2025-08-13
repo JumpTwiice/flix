@@ -1,7 +1,7 @@
 mod Test.Exp.Fixpoint.PQuery {
 
     ///////////////////////////////////////////////////////////////////////////
-    // Provenance at Depth 1
+    // Provenance at depth 1
     ///////////////////////////////////////////////////////////////////////////
 
     @Test
@@ -85,7 +85,7 @@ mod Test.Exp.Fixpoint.PQuery {
         Vector.map(v -> ematch v { case A(x) => x }, pp) `Assert.eq` Vector#{(1, 2)}
 
     ///////////////////////////////////////////////////////////////////////////
-    // Provenance at Depth 2
+    // Provenance at depth 2
     ///////////////////////////////////////////////////////////////////////////
 
     @Test
@@ -189,7 +189,7 @@ mod Test.Exp.Fixpoint.PQuery {
         Vector.map(v -> ematch v { case A(x) => x }, pp) `Assert.eq` Vector#{(1, 2), (1, 2)}
 
     ///////////////////////////////////////////////////////////////////////////
-    // Provenance for Cycles
+    // Provenance for cycles
     ///////////////////////////////////////////////////////////////////////////
 
     @Test
@@ -258,7 +258,7 @@ mod Test.Exp.Fixpoint.PQuery {
         Vector.map(v -> ematch v { case Edge(x, y) => (x, y) }, pp) `Assert.eq` Vector#{(2, 3), (3, 4), (4, 1), (1, 2)}
 
     ///////////////////////////////////////////////////////////////////////////
-    // Provenance for Alternating Paths
+    // Provenance for alternating paths
     ///////////////////////////////////////////////////////////////////////////
 
     @Test
@@ -545,5 +545,245 @@ mod Test.Exp.Fixpoint.PQuery {
         Vector.map(v -> ematch v {
             case C(x) => "C(${x})"
         }, pp) `Assert.eq` Vector#{"C(1)", "C(2)", "C(3)"}
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Provenance computation on a path
+    ///////////////////////////////////////////////////////////////////////////
+
+    @Test
+    def testPQueryWithPathCost01(): Bool =
+        let db = #{
+            Edge("a", "b", 3).
+            Edge("b", "c", 1).
+            Edge("c", "d", 2).
+        };
+        let pr = #{
+            Path(x, y) :- Edge(x, y, _).
+            Path(x, z) :- Path(x, y), Edge(y, z, _).
+        };
+        let pp = pquery db, pr select Path("a", "d") with {Edge};
+        Vector.sumWith(v -> ematch v {
+            case Edge(_, _, c) => c
+        }, pp) `Assert.eq` 6
+
+    @Test
+    def testPQueryWithPathCost02(): Bool =
+        let db = #{
+            Edge("a", "b", 2).
+            Edge("b", "c", 4).
+            Edge("c", "d", 3).
+            Edge("d", "e", 1).
+            Edge("a", "x", 5).
+            Edge("b", "y", 6).
+            Edge("c", "z", 2).
+            Edge("e", "w", 7).
+        };
+        let pr = #{
+            Path(x, y) :- Edge(x, y, _).
+            Path(x, z) :- Path(x, y), Edge(y, z, _).
+        };
+        let pp = pquery db, pr select Path("a", "e") with {Edge};
+        Vector.sumWith(v -> ematch v {
+            case Edge(_, _, c) => c
+        }, pp) `Assert.eq` 10
+
+    @Test
+    def testPQueryWithPathCost03(): Bool =
+        let db = #{
+            Edge("a", "b", 3).
+            Edge("b", "c", 2).
+            Edge("c", "d", 4).
+            Edge("d", "f", 1).
+            Edge("f", "g", 2).
+            Edge("g", "e", 3).
+            Edge("a", "x", 5).
+            Edge("x", "y", 2).
+            Edge("y", "x", 1).
+            Edge("b", "z", 6).
+            Edge("z", "w", 3).
+            Edge("w", "z", 2).
+            Edge("c", "p", 4).
+            Edge("p", "q", 1).
+            Edge("q", "r", 2).
+            Edge("r", "p", 3).
+            Edge("d", "m", 2).
+            Edge("f", "n", 7).
+            Edge("g", "s", 1).
+            Edge("e", "t", 4).
+        };
+        let pr = #{
+            Path(x, y) :- Edge(x, y, _).
+            Path(x, z) :- Path(x, y), Edge(y, z, _).
+        };
+        let pp = pquery db, pr select Path("a", "e") with {Edge};
+        Vector.sumWith(v -> ematch v {
+            case Edge(_, _, c) => c
+        }, pp) `Assert.eq` 15
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Provenance with functions and filters.
+    ///////////////////////////////////////////////////////////////////////////
+
+    @Test
+    def testPQueryWithAppAndFilter01(): Bool =
+        let db = #{
+            A(1). A(3). A(5).
+            B(2). B(7). B(11).
+        };
+        let pr = #{
+            R(x * y) :- A(x), B(y), if (x <= y).
+        };
+        let pp = pquery db, pr select R(21) with {A, B};
+        Vector.map(v -> ematch v {
+            case A(x) => "A(${x})"
+            case B(x) => "B(${x})"
+        }, pp) `Assert.eq` Vector#{"A(3)", "B(7)"}
+
+    @Test
+    def testPQueryWithAppAndFilter02(): Bool =
+        let db = #{
+            A(2). A(4). A(6).
+            B(3). B(8). B(12).
+        };
+        let pr = #{
+            R(x * y) :- A(x), B(y), if (x <= y).
+        };
+        let pp = pquery db, pr select R(32) with {A, B};
+        Vector.map(v -> ematch v {
+            case A(x) => "A(${x})"
+            case B(x) => "B(${x})"
+        }, pp) `Assert.eq` Vector#{"A(4)", "B(8)"}
+
+    @Test
+    def testPQueryWithAppAndFilter03(): Bool =
+        let db = #{
+            A(2). A(4). A(6).
+            B(3). B(7). B(12).
+            C(5). C(8). C(15).
+        };
+        let pr = #{
+            R(x + y + z) :- A(x), B(y), C(z), if (x <= y), if (y <= z).
+        };
+        let pp = pquery db, pr select R(19) with {A, B, C};
+        Vector.map(v -> ematch v {
+            case A(x) => "A(${x})"
+            case B(x) => "B(${x})"
+            case C(x) => "C(${x})"
+        }, pp) `Assert.eq` Vector#{"A(4)", "B(7)", "C(8)"}
+
+    @Test
+    def testPQueryWithAppAndFilter04(): Bool =
+        let db = #{
+            A(1). A(3). A(8).
+            B(4). B(9). B(14).
+            C(6). C(10). C(18).
+        };
+        let pr = #{
+            R(x * y - z) :- A(x), B(y), C(z), if (x < y), if (z > x).
+        };
+        let pp = pquery db, pr select R(21) with {A, B, C};
+        Vector.map(v -> ematch v {
+            case A(x) => "A(${x})"
+            case B(x) => "B(${x})"
+            case C(x) => "C(${x})"
+        }, pp) `Assert.eq` Vector#{"A(3)", "B(9)", "C(6)"}
+
+    @Test
+    def testPQueryWithAppAndFilter05(): Bool =
+        let db = #{
+            A(2). A(5). A(9).
+            B(3). B(8). B(13).
+            C(4). C(11). C(20).
+        };
+        let pr = #{
+            R(x * y + z) :- A(x), B(y), C(z), if (x <= y), if (z >= y), if (x + z > 10).
+        };
+        let pp = pquery db, pr select R(51) with {A, B, C};
+        Vector.map(v -> ematch v {
+            case A(x) => "A(${x})"
+            case B(x) => "B(${x})"
+            case C(x) => "C(${x})"
+        }, pp) `Assert.eq` Vector#{"A(5)", "B(8)", "C(11)"}
+
+    /////////////////////////////////////////////////////////////////////////////
+    /// Pquery should have an open row.
+    /////////////////////////////////////////////////////////////////////////////
+
+    @Test
+    def testPQueryOpenRow01(): Bool =
+        let pr = #{
+            A(1, 2).
+        };
+        let pp = pquery pr select A(1, 2) with {A};
+        Vector#{3} `Assert.eq` Vector.map(v -> ematch v {
+            case A(x, y) => x + y
+            case B(x)    => x
+        }, pp)
+
+    @Test
+    def testPQueryOpenRow02(): Bool =
+        let pr = #{
+            A(1, 2).
+            B(4).
+        };
+        let pp = pquery pr select B(4) with {B};
+        Vector#{4} `Assert.eq` Vector.map(v -> ematch v {
+            case A(x, y) => x + y
+            case B(x)    => x
+        }, pp)
+
+    @Test
+    def testPQueryOpenRow03(): Bool =
+        let pr = #{
+            A(1, 2).
+            B(4).
+        };
+        let pp = pquery pr select A(1, 2) with {A};
+        Vector#{3} `Assert.eq` Vector.map(v -> ematch v {
+            case A(x, y)    => x + y
+            case B(x)       => x
+            case C(x, y, z) => x + y + z
+        }, pp)
+
+    /////////////////////////////////////////////////////////////////////////////
+    /// Term types are ordered correctly.
+    /////////////////////////////////////////////////////////////////////////////
+
+    @Test
+    def testPQueryTermTypes01(): Bool =
+        let pr = #{
+            A(1i32, 'c').
+            B('c').
+            R(x, y) :- A(x, y), B(y).
+        };
+        let pp = pquery pr select R(1i32, 'c') with {A};
+        let res = Vector.map(v -> ematch v {
+            case A(x, y) => (x, y)
+        }, pp);
+        Vector#{(1i32, 'c')} `Assert.eq` res
+
+    @Test
+    def testPQueryTermTypes02(): Bool =
+        let pr = #{
+            A(1i32, 'c', 2.4f64).
+            B('c').
+            R(x, y) :- A(x, y, z), B(y).
+        };
+        let pp = pquery pr select R(1i32, 'c') with {A};
+        let res = Vector.map(v -> ematch v {
+            case A(x, y, z) => (x, y, z)
+        }, pp);
+        Vector#{(1i32, 'c', 2.4f64)} `Assert.eq` res
+
+    @Test
+    def testPQueryTermTypes03(): Bool =
+        let pr = #{
+            A(1i32, 2i64, 3.4f32, 5.6f64, 6i8, 7i16, "Hello", 'c', true).
+        };
+        let pp = pquery pr select A(1i32, 2i64, 3.4f32, 5.6f64, 6i8, 7i16, "Hello", 'c', true) with {A};
+        let res = Vector.map(v -> ematch v {
+            case A(x, y, z, w, u, t, s, r, q) => (x, y, z, w, u, t, s, r, q)
+        }, pp);
+        Vector#{(1i32, 2i64, 3.4f32, 5.6f64, 6i8, 7i16, "Hello", 'c', true)} `Assert.eq` res
 
 }
