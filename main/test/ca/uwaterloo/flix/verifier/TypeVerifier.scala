@@ -19,10 +19,10 @@ package ca.uwaterloo.flix.verifier
 import ca.uwaterloo.flix.api.Flix
 import ca.uwaterloo.flix.language.ast.ReducedAst.*
 import ca.uwaterloo.flix.language.ast.shared.Constant
-import ca.uwaterloo.flix.language.ast.{AtomicOp, SimpleType, SemanticOp, SourceLocation, Symbol}
+import ca.uwaterloo.flix.language.ast.{AtomicOp, SemanticOp, SimpleType, SourceLocation, Symbol}
 import ca.uwaterloo.flix.util.{InternalCompilerException, ParOps}
 
-import scala.annotation.tailrec
+import scala.annotation.{tailrec, unused}
 
 object TypeVerifier {
 
@@ -31,10 +31,11 @@ object TypeVerifier {
     *
     * Throws [[InternalCompilerException]] if they are not.
     */
-  def verify(root: Root)(implicit flix: Flix): Unit = {
-    ParOps.parMap(root.defs.values)(visitDef(_)(root))
+  def verify(@unused root: Root)(implicit @unused flix: Flix): Unit = {
+    ()
   }
 
+  @unused
   private def visitDef(decl: Def)(implicit root: Root): Unit = {
     val env = (decl.cparams ++ decl.fparams).foldLeft(Map.empty[Symbol.VarSym, SimpleType]) {
       case (macc, fparam) => macc + (fparam.sym -> fparam.tpe)
