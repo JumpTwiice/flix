@@ -307,7 +307,7 @@ mod Fixpoint3.Interpreter {
                     // We are allowed to spawn threads. Try to do so.
                     let newCtx = (db, env, boxing);
                     lookupIndex(searchIndex, db) |>
-                        BPlusTree.parForEach(parEvalSearchOrQueryOp(rc, tuplePos, writes, body, newCtx, parLevel - 1))
+                        BPlusTree.parForEachWhen(evalSearchOrQueryOp(rc, tuplePos, writes, body, newCtx, parLevel), parEvalSearchOrQueryOp(rc, tuplePos, writes, body, newCtx, parLevel - 1), 10)
                 }
             case RelOp.Query(tuplePos, searchIndex, _, Relational, writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
@@ -352,7 +352,7 @@ mod Fixpoint3.Interpreter {
                     // We are allowed to spawn threads. Try to do so.
                     let newCtx = (db, env, boxing);
                     lookupIndex(searchIndex, db) |>
-                        BPlusTree.parForEach(parEvalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, newCtx, parLevel))
+                        BPlusTree.parForEachWhen(evalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, newCtx, parLevel), parEvalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, newCtx, parLevel - 1), 10)
                 }
             case RelOp.Query(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
