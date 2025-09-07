@@ -89,13 +89,19 @@ mod Fixpoint3.Phase.Simplifier {
         case RamStmt.Swap(_, _)      => Some(stmt)
         case RamStmt.Purge(_)        => Some(stmt)
         case RamStmt.Seq(xs) =>
-            Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)
-                |> RamStmt.Seq
-                |> Some
+            let children = Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs);
+            match Vector.length(children) {
+                case 0 => None
+                case 1 => Vector.head(children)
+                case _ => Some(RamStmt.Seq(children))
+            }
         case RamStmt.Par(xs) =>
-            Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs)
-                |> RamStmt.Par
-                |> Some
+            let children = Vector.filterMap(simplifyHelper(nonEmpty, predicates, inUntil), xs);
+            match Vector.length(children) {
+                case 0 => None
+                case 1 => Vector.head(children)
+                case _ => Some(RamStmt.Par(children))
+            }
         case RamStmt.Until(test, body) =>
             match simplifyHelper(nonEmpty, predicates, true, body) {
                 case None                 => None

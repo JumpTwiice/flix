@@ -74,4 +74,22 @@ mod Fixpoint3.Options {
     @Internal
     pub def parLevel(): Int32 = 2
 
+    ///
+    /// Lower bound for when a collection/index is traversed in parallel.
+    ///
+    /// Consider the program:
+    /// ```
+    /// search a ∈ A do
+    ///     search b ∈ B do
+    ///         ...
+    ///     end
+    /// end
+    /// ```
+    /// Threads are only spawned for the `search a ∈ A do` statement if `A` contains more
+    /// than `parElemLowerBound` elements
+    ///
+    ///
+    @Internal
+    pub def parElemLowerBound(): Int32 = 10
+
 }

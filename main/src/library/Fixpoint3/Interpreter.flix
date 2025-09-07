@@ -25,7 +25,7 @@ mod Fixpoint3.Interpreter {
     use Fixpoint3.Boxing.{boxWith, unboxWith}
     use Fixpoint3.BoxingType.{Boxing, RamIdToPos}
     use Fixpoint3.Counter
-    use Fixpoint3.Options.{usedArity, parLevel}
+    use Fixpoint3.Options.{usedArity, parElemLowerBound, parLevel}
     use Fixpoint3.Predicate.allFullRelSyms
     use Fixpoint3.Util.getOrCrash
 
@@ -314,7 +314,7 @@ mod Fixpoint3.Interpreter {
                 } else {
                     // We are allowed to spawn threads. Try to do so.
                     lookupIndex(searchIndex, db) |>
-                        BPlusTree.parForEach(parEvalSearchOrQueryOp(rc, tuplePos, writes, body, ctx, parLevel - 1))
+                        BPlusTree.parForEachWhen(evalSearchOrQueryOp(rc, tuplePos, writes, body, ctx, parLevel - 1), parEvalSearchOrQueryOp(rc, tuplePos, writes, body, ctx, parLevel - 1), parElemLowerBound())
                 }
             case RelOp.Query(tuplePos, searchIndex, _, Relational, writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
@@ -358,7 +358,7 @@ mod Fixpoint3.Interpreter {
                 } else {
                     // We are allowed to spawn threads. Try to do so.
                     lookupIndex(searchIndex, db) |>
-                        BPlusTree.parForEach(parEvalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, ctx, parLevel))
+                        BPlusTree.parForEachWhen(evalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, ctx, parLevel), parEvalSearchOrQueryOpLattice(rc, tuplePos, meetWith, bot, leq, glb, writes, body, ctx, parLevel), parElemLowerBound())
                 }
             case RelOp.Query(tuplePos, searchIndex, meetWith, Latticenal(bot, leq, _, glb), writes, body) =>
                 let (minEnv, maxEnv, _, _) = env;
