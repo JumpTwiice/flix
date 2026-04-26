@@ -14,6 +14,25 @@
  * limitations under the License.
  */
 
-pub mod Net {
-    /* empty */
+pub mod Net.SocketAddrV6 {
+
+    use Net.Ipv6Addr
+
+    ///
+    /// Represents an Ipv6 Socket Address.
+    ///
+    pub enum SocketAddrV6 with Eq {
+        case SocketAddrV6(Ipv6Addr, Int32)
+    }
+
+    instance ToString[SocketAddrV6] {
+        pub def toString(x: SocketAddrV6): String =
+            let SocketAddrV6.SocketAddrV6(ip, port) = x;
+            "[${ToString.toString(ip)}]:${port}"
+    }
+
+    instance Formattable[SocketAddrV6] {
+        pub def format(x: SocketAddrV6): RichString = RichString.fromString(ToString.toString(x))
+    }
+
 }

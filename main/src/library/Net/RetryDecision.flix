@@ -14,6 +14,18 @@
  * limitations under the License.
  */
 
-pub mod Net {
-    /* empty */
+pub mod Net.RetryDecision {
+
+    use Time.Duration
+
+    ///
+    /// The decision returned by a retry handler.
+    ///
+    pub enum RetryDecision with Eq, ToString {
+        /// Retry after the given duration.
+        case Retry(Duration)
+        /// Do not retry; propagate the last result.
+        case Stop
+    }
+
 }

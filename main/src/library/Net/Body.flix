@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
-pub mod Net {
-    /* empty */
+pub mod Net.Body {
+
+    ///
+    /// An enum representing the body of an HTTP request or response.
+    ///
+    pub enum Body with Eq, ToString {
+        case Text(String)
+        case Bytes(Vector[Int8])
+    }
+
 }

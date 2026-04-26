@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
-pub mod Net {
-    /* empty */
+pub mod Net.TcpServer {
+
+    import java.net.ServerSocket
+
+    ///
+    /// Represents a TCP server.
+    ///
+    pub enum TcpServer(ServerSocket)
+
 }

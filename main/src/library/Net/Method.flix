@@ -14,6 +14,19 @@
  * limitations under the License.
  */
 
-pub mod Net {
-    /* empty */
+pub mod Net.Method {
+
+    ///
+    /// An enum representing an HTTP method.
+    ///
+    pub enum Method with Eq, ToString {
+        case Get
+        case Head
+        case Options
+        case Post
+        case Put
+        case Patch
+        case Delete
+    }
+
 }
